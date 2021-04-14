@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8B282C8F-5870-44C3-9A2A-B9091F4E9F68}</ProjectGuid>
+    <RootNamespace>driver</RootNamespace>
+    <ProjectName>driver</ProjectName>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <ForcedTargetVersion Condition="'$(SDVHacks)'=='true'">Windows10</ForcedTargetVersion>
+  </PropertyGroup>
+  <Import Project="..\wireguard-nt.props" />
+  <PropertyGroup>
+    <TargetName>wireguard</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>NDIS_MINIPORT_DRIVER=1;NDIS620_MINIPORT=1;NDIS683_MINIPORT=1;NDIS_WDM=1;POOL_ZERO_DOWN_LEVEL_SUPPORT;POOL_NX_OPTIN=1;_NO_CRT_STDIO_INLINE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(SDVHacks)'=='true'">SDV_HACKS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/volatile:iso %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4100;4200;4201;$(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>ndis.lib;netio.lib;ntstrsafe.lib;uuid.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(SDVHacks)'!='true'">cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(TargetVersion)'=='Windows7' OR '$(TargetVersion)'=='Windows8'">fltmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <Inf>
+      <TimeStamp>$(WireGuardVersion)</TimeStamp>
+    </Inf>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <Inf>
+      <TimeStamp>*</TimeStamp>
+    </Inf>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="allowedips.c" />
+    <ClCompile Include="cookie.c" />
+    <ClCompile Include="crypto.c" />
+    <ClCompile Include="device.c" />
+    <ClCompile Include="ioctl.c" />
+    <ClCompile Include="logging.c" />
+    <ClCompile Include="main.c" />
+    <ClCompile Include="memory.c" />
+    <ClCompile Include="noise.c" />
+    <ClCompile Include="peer.c" />
+    <ClCompile Include="peerlookup.c" />
+    <ClCompile Include="queueing.c" />
+    <ClCompile Include="ratelimiter.c" />
+    <ClCompile Include="rcu.c" />
+    <ClCompile Include="receive.c" />
+    <ClCompile Include="selftest\allowedips.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="selftest\counter.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="selftest\chacha20poly1305.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="selftest\ratelimiter.c">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="send.c" />
+    <ClCompile Include="socket.c" />
+    <ClCompile Include="timers.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="wireguard.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="wireguard.inf" />
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="allowedips.h" />
+    <ClInclude Include="arithmetic.h" />
+    <ClInclude Include="interlocked.h" />
+    <ClInclude Include="containers.h" />
+    <ClInclude Include="cookie.h" />
+    <ClInclude Include="crypto.h" />
+    <ClInclude Include="device.h" />
+    <ClInclude Include="ioctl.h" />
+    <ClInclude Include="logging.h" />
+    <ClInclude Include="memory.h" />
+    <ClInclude Include="messages.h" />
+    <ClInclude Include="noise.h" />
+    <ClInclude Include="peer.h" />
+    <ClInclude Include="peerlookup.h" />
+    <ClInclude Include="queueing.h" />
+    <ClInclude Include="ratelimiter.h" />
+    <ClInclude Include="rcu.h" />
+    <ClInclude Include="socket.h" />
+    <ClInclude Include="timers.h" />
+    <ClInclude Include="undocumented.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="crypto-amd64.asm">
+      <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
+    </MASM>
+  </ItemGroup>
+  <Import Project="..\wireguard-nt.props.user" Condition="exists('..\wireguard-nt.props.user')" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

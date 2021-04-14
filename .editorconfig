@@ -1,0 +1,7 @@
+[*.{c,h,inf,rc}]
+indent_style = space
+indent_size = 4
+
+[*.{proj,props,vcxproj,filters}]
+indent_style = space
+indent_size = 2

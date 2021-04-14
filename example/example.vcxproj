@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{5B234798-88FB-49CE-A583-79CA31C8F801}</ProjectGuid>
+    <RootNamespace>example</RootNamespace>
+    <ProjectName>example</ProjectName>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>WindowsApplicationForDrivers10.0</PlatformToolset>
+    <ForcedTargetVersion>Windows10</ForcedTargetVersion>
+  </PropertyGroup>
+  <Import Project="..\wireguard-nt.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4100;$(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>..\api</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>bcrypt.lib;crypt32.lib;iphlpapi.lib;kernel32.lib;ntdll.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="example.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\api\api.vcxproj">
+      <Project>{99648503-7DFB-4C06-A87A-E7B66E93FF84}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="..\wireguard-nt.props.user" Condition="exists('..\wireguard-nt.props.user')" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

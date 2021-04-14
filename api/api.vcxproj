@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{99648503-7DFB-4C06-A87A-E7B66E93FF84}</ProjectGuid>
+    <RootNamespace>api</RootNamespace>
+    <ProjectName>api</ProjectName>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>WindowsApplicationForDrivers10.0</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="..\wireguard-nt.props" />
+  <PropertyGroup>
+    <TargetName>wireguard</TargetName>
+    <IgnoreImportLibrary>true</IgnoreImportLibrary>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="Exists('$(OutDir)whql\')">HAVE_WHQL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='Win32'">MAYBE_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='x64'">ACCEPT_WOW64;MAYBE_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='ARM'">MAYBE_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='ARM64'">ACCEPT_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/volatile:iso %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4100;4201;$(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>..\$(Configuration)\$(WireGuardPlatform);..\$(Configuration);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions Condition="Exists('$(OutDir)whql\')">HAVE_WHQL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="Exists('..\$(Configuration)\arm64\wireguard.dll')">BUILT_ARM64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="Exists('..\$(Configuration)\amd64\wireguard.dll')">BUILT_AMD64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='Win32'">WANT_ARM64_WOW64;WANT_AMD64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='x64'">WANT_ARM64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='ARM'">WANT_ARM64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <DelayLoadDLLs>advapi32.dll;bcrypt.dll;crypt32.dll;cfgmgr32.dll;iphlpapi.dll;ole32.dll;nci.dll;setupapi.dll;shell32.dll;shlwapi.dll;version.dll</DelayLoadDLLs>
+      <AdditionalDependencies>Bcrypt.lib;Crypt32.lib;Cfgmgr32.lib;Iphlpapi.lib;$(IntDir)nci.lib;ntdll.lib;Setupapi.lib;shlwapi.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(IntDir)$(TargetName).lib</ImportLibrary>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ResourceCompile Include="resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="exports.def" />
+    <None Include="nci.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="main.h" />
+    <ClInclude Include="adapter.h" />
+    <ClInclude Include="logger.h" />
+    <ClInclude Include="namespace.h" />
+    <ClInclude Include="nci.h" />
+    <ClInclude Include="ntdll.h" />
+    <ClInclude Include="registry.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="rundll32.h" />
+    <ClInclude Include="wireguard.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.c" />
+    <ClCompile Include="adapter.c" />
+    <ClCompile Include="logger.c" />
+    <ClCompile Include="namespace.c" />
+    <ClCompile Include="registry.c" />
+    <ClCompile Include="resource.c" />
+    <ClCompile Include="configuration.c" />
+    <ClCompile Include="rundll32.c" />
+  </ItemGroup>
+  <Import Project="..\wireguard-nt.props.user" Condition="exists('..\wireguard-nt.props.user')" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+  <PropertyGroup>
+    <CleanDependsOn>CleanInfVersion;CleanNci;$(CleanDependsOn)</CleanDependsOn>
+  </PropertyGroup>
+  <Target Name="BuildInfVersion" BeforeTargets="ClCompile" Inputs="$(OutDir)driver\wireguard.inf" Outputs="$(IntDir)wireguard-inf.h">
+    <Exec Command="cscript.exe /nologo &quot;extract-driverver.js&quot; &lt; &quot;$(OutDir)driver\wireguard.inf&quot; &gt; &quot;$(IntDir)wireguard-inf.h&quot;" />
+  </Target>
+  <Target Name="CleanInfVersion">
+    <Delete Files="$(IntDir)wireguard-inf.h" />
+  </Target>
+  <Target Name="BuildNci" BeforeTargets="Link" Inputs="$(ProjectDir)nci.def;$(ProjectDir)nci.h" Outputs="$(IntDir)nci.lib">
+    <Exec Command="cl.exe /nologo /DGENERATE_LIB /Ob0 /c /Fo&quot;$(IntDir)nci.obj&quot; /Tc &quot;nci.h&quot;" />
+    <Exec Command="lib.exe /def:&quot;$(ProjectDir)nci.def&quot; /out:&quot;$(IntDir)nci.lib&quot; /machine:$(PlatformTarget) /nologo &quot;$(IntDir)nci.obj&quot;" />
+  </Target>
+  <Target Name="CleanNci">
+    <Delete Files="$(IntDir)nci.obj;$(IntDir)nci.lib" />
+  </Target>
+</Project>
