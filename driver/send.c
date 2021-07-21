@@ -304,16 +304,14 @@ PacketPeerTxWork(_Inout_ WG_PEER *Peer, _In_ ULONG Budget)
     return FALSE;
 }
 
-_Use_decl_annotations_
-VOID
-PacketTxWorker(MULTICORE_WORKQUEUE *WorkQueue)
+_IRQL_requires_max_(PASSIVE_LEVEL)
+static VOID
+ProcessPerPeerWork(PEER_SERIAL *WorkQueue)
 {
-    WG_DEVICE *Wg = CONTAINING_RECORD(WorkQueue, WG_DEVICE, TxThreads);
     PEER_SERIAL_ENTRY *Entry;
-
-    while ((Entry = PeerSerialDequeue(&Wg->TxQueue)) != NULL)
+    while ((Entry = PeerSerialDequeue(WorkQueue)) != NULL)
         PeerSerialMaybeRetire(
-            &Wg->TxQueue,
+            WorkQueue,
             Entry,
             PacketPeerTxWork(CONTAINING_RECORD(Entry, WG_PEER, TxSerialEntry), PEER_XMIT_PACKETS_PER_ROUND));
 }
@@ -356,9 +354,11 @@ PacketEncryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
         }
     enqueue:
         _Analysis_assume_(First != NULL);
-        QueueEnqueuePerPeer(&Peer->Device->TxQueue, &Peer->TxSerialEntry, &Peer->Device->TxThreads, First, State);
+        QueueEnqueuePerPeer(&Peer->Device->TxQueue, &Peer->TxSerialEntry, First, State);
+        ProcessPerPeerWork(&Wg->TxQueue);
     }
     SimdPut(&Simd);
+    ProcessPerPeerWork(&Wg->TxQueue);
 }
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
@@ -373,8 +373,10 @@ PacketCreateData(_Inout_ WG_PEER *Peer, _In_ NET_BUFFER_LIST *First)
 
     Ret = QueueEnqueuePerDeviceAndPeer(&Wg->EncryptQueue, &Peer->TxQueue, &Wg->EncryptThreads, First);
     if (Ret == STATUS_PIPE_BROKEN)
-        QueueEnqueuePerPeer(
-            &Peer->Device->TxQueue, &Peer->TxSerialEntry, &Peer->Device->TxThreads, First, PACKET_STATE_DEAD);
+    {
+        QueueEnqueuePerPeer(&Peer->Device->TxQueue, &Peer->TxSerialEntry, First, PACKET_STATE_DEAD);
+        MulticoreWorkQueueBump(&Wg->EncryptThreads);
+    }
     if (NT_SUCCESS(Ret) || Ret == STATUS_PIPE_BROKEN)
         return;
     ExReleaseRundownProtection(&Peer->InUse);

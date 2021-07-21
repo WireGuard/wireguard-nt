@@ -428,15 +428,14 @@ PacketPeerRxWork(_Inout_ WG_PEER *Peer, _In_ ULONG Budget)
     return MoreProcessing;
 }
 
-_Use_decl_annotations_
-VOID
-PacketRxWorker(MULTICORE_WORKQUEUE *WorkQueue)
+_IRQL_requires_max_(PASSIVE_LEVEL)
+static VOID
+ProcessPerPeerWork(PEER_SERIAL *WorkQueue)
 {
-    WG_DEVICE *Wg = CONTAINING_RECORD(WorkQueue, WG_DEVICE, RxThreads);
     PEER_SERIAL_ENTRY *Entry;
-    while ((Entry = PeerSerialDequeue(&Wg->RxQueue)) != NULL)
+    while ((Entry = PeerSerialDequeue(WorkQueue)) != NULL)
         PeerSerialMaybeRetire(
-            &Wg->RxQueue,
+            WorkQueue,
             Entry,
             PacketPeerRxWork(CONTAINING_RECORD(Entry, WG_PEER, RxSerialEntry), PEER_XMIT_PACKETS_PER_ROUND));
 }
@@ -460,10 +459,12 @@ PacketDecryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
             NET_BUFFER_LIST_NEXT_NBL(Nbl) = NULL;
             PACKET_STATE State =
                 DecryptPacket(&Simd, Nbl, NET_BUFFER_LIST_KEYPAIR(Nbl)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD;
-            QueueEnqueuePerPeer(&Peer->Device->RxQueue, &Peer->RxSerialEntry, &Peer->Device->RxThreads, Nbl, State);
+            QueueEnqueuePerPeer(&Wg->RxQueue, &Peer->RxSerialEntry, Nbl, State);
         }
+        ProcessPerPeerWork(&Wg->RxQueue);
     }
     SimdPut(&Simd);
+    ProcessPerPeerWork(&Wg->RxQueue);
 }
 
 #pragma warning(suppress : 28194) /* `Nbl` is aliased in QueueEnqueuePerDeviceAndPeer, or QueueEnqueuePerPeer or freed \
@@ -512,9 +513,9 @@ PacketConsumeData(_Inout_ WG_DEVICE *Wg, _Inout_ __drv_aliasesMem NET_BUFFER_LIS
             WG_PEER *Peer = NET_BUFFER_LIST_PEER(Nbl);
             NextNbl = NET_BUFFER_LIST_NEXT_NBL(Nbl);
             NET_BUFFER_LIST_NEXT_NBL(Nbl) = NULL;
-            QueueEnqueuePerPeer(
-                &Peer->Device->RxQueue, &Peer->RxSerialEntry, &Peer->Device->RxThreads, Nbl, PACKET_STATE_DEAD);
+            QueueEnqueuePerPeer(&Peer->Device->RxQueue, &Peer->RxSerialEntry, Nbl, PACKET_STATE_DEAD);
         }
+        MulticoreWorkQueueBump(&Wg->DecryptThreads);
     }
 }
 

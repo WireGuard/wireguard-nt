@@ -167,7 +167,6 @@ VOID
 FreeSendNetBufferList(_In_ WG_DEVICE *Wg, __drv_freesMem(Mem) _In_ NET_BUFFER_LIST *Nbl, _In_ ULONG SendCompleteFlags);
 
 MULTICORE_WORKQUEUE_ROUTINE PacketEncryptWorker, PacketDecryptWorker;
-MULTICORE_WORKQUEUE_ROUTINE PacketTxWorker, PacketRxWorker;
 MULTICORE_WORKQUEUE_ROUTINE PacketHandshakeTxWorker, PacketHandshakeRxWorker;
 
 typedef enum _PACKET_STATE
@@ -283,7 +282,6 @@ static inline VOID
 QueueEnqueuePerPeer(
     _Inout_ PEER_SERIAL *PeerQueue,
     _Inout_ PEER_SERIAL_ENTRY *PeerSerialEntry,
-    _Inout_ MULTICORE_WORKQUEUE *PeerThreads,
     _Inout_ __drv_aliasesMem NET_BUFFER_LIST *Nbl,
     _In_ PACKET_STATE State)
 {
@@ -291,10 +289,8 @@ QueueEnqueuePerPeer(
      * peer can be freed from below us.
      */
     WG_PEER *Peer = PeerGet(NET_BUFFER_LIST_PEER(Nbl));
-
     WriteRelease(NET_BUFFER_LIST_CRYPT_STATE(Nbl), State);
-    if (PeerSerialEnqueueIfNotBusy(PeerQueue, PeerSerialEntry, TRUE))
-        MulticoreWorkQueueBump(PeerThreads);
+    PeerSerialEnqueueIfNotBusy(PeerQueue, PeerSerialEntry, TRUE);
     PeerPut(Peer);
 }
 

@@ -79,7 +79,6 @@ typedef struct _WG_DEVICE
     PEER_SERIAL TxQueue, RxQueue, HandshakeTxQueue;
     NET_BUFFER_LIST_QUEUE HandshakeRxQueue;
     MULTICORE_WORKQUEUE EncryptThreads, DecryptThreads;
-    MULTICORE_WORKQUEUE TxThreads, RxThreads;
     MULTICORE_WORKQUEUE HandshakeTxThreads, HandshakeRxThreads;
     SOCKET __rcu *Sock4, *Sock6;
     NOISE_STATIC_IDENTITY StaticIdentity;

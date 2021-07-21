@@ -385,8 +385,6 @@ HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
     PeerRemoveAll(Wg);
     MulticoreWorkQueueDestroy(&Wg->DecryptThreads);
     MulticoreWorkQueueDestroy(&Wg->EncryptThreads);
-    MulticoreWorkQueueDestroy(&Wg->RxThreads);
-    MulticoreWorkQueueDestroy(&Wg->TxThreads);
     MulticoreWorkQueueDestroy(&Wg->HandshakeRxThreads);
     MulticoreWorkQueueDestroy(&Wg->HandshakeTxThreads);
     PtrRingCleanup(&Wg->DecryptQueue, NULL);
@@ -648,17 +646,9 @@ InitializeEx(
     if (!NT_SUCCESS(Status))
         goto cleanupEncryptThreads;
 
-    Status = MulticoreWorkQueueInit(&Wg->TxThreads, PacketTxWorker);
-    if (!NT_SUCCESS(Status))
-        goto cleanupDecryptThreads;
-
-    Status = MulticoreWorkQueueInit(&Wg->RxThreads, PacketRxWorker);
-    if (!NT_SUCCESS(Status))
-        goto cleanupTxThreads;
-
     Status = MulticoreWorkQueueInit(&Wg->HandshakeTxThreads, PacketHandshakeTxWorker);
     if (!NT_SUCCESS(Status))
-        goto cleanupRxThreads;
+        goto cleanupDecryptThreads;
 
     Status = MulticoreWorkQueueInit(&Wg->HandshakeRxThreads, PacketHandshakeRxWorker);
     if (!NT_SUCCESS(Status))
@@ -688,10 +678,6 @@ cleanupHandshakeRxThreads:
     MulticoreWorkQueueDestroy(&Wg->HandshakeRxThreads);
 cleanupHandshakeTxThreads:
     MulticoreWorkQueueDestroy(&Wg->HandshakeTxThreads);
-cleanupRxThreads:
-    MulticoreWorkQueueDestroy(&Wg->RxThreads);
-cleanupTxThreads:
-    MulticoreWorkQueueDestroy(&Wg->TxThreads);
 cleanupDecryptThreads:
     MulticoreWorkQueueDestroy(&Wg->DecryptThreads);
 cleanupEncryptThreads:
