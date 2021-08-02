@@ -7,9 +7,12 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "api", "api\api.vcxproj", "{99648503-7DFB-4C06-A87A-E7B66E93FF84}"
 	ProjectSection(ProjectDependencies) = postProject
 		{8B282C8F-5870-44C3-9A2A-B9091F4E9F68} = {8B282C8F-5870-44C3-9A2A-B9091F4E9F68}
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82} = {E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver", "driver\driver.vcxproj", "{8B282C8F-5870-44C3-9A2A-B9091F4E9F68}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "downlevelshim", "downlevelshim\downlevelshim.vcxproj", "{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3A98F138-EE02-4488-B856-B3C48500BEA8}"
 	ProjectSection(SolutionItems) = preProject
@@ -79,6 +82,22 @@ Global
 		{8B282C8F-5870-44C3-9A2A-B9091F4E9F68}.Release|arm64.Build.0 = Release|ARM64
 		{8B282C8F-5870-44C3-9A2A-B9091F4E9F68}.Release|x86.ActiveCfg = Release|Win32
 		{8B282C8F-5870-44C3-9A2A-B9091F4E9F68}.Release|x86.Build.0 = Release|Win32
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|amd64.ActiveCfg = Debug|x64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|amd64.Build.0 = Debug|x64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|arm.ActiveCfg = Debug|ARM
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|arm.Build.0 = Debug|ARM
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|arm64.ActiveCfg = Debug|ARM64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|arm64.Build.0 = Debug|ARM64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|x86.ActiveCfg = Debug|Win32
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Debug|x86.Build.0 = Debug|Win32
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|amd64.ActiveCfg = Release|x64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|amd64.Build.0 = Release|x64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|arm.ActiveCfg = Release|ARM
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|arm.Build.0 = Release|ARM
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|arm64.ActiveCfg = Release|ARM64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|arm64.Build.0 = Release|ARM64
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|x86.ActiveCfg = Release|Win32
+		{E22CA58F-DEA5-48DC-BCF5-12075AD9BB82}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -12,6 +12,8 @@ wireguard.cat RCDATA "driver\\wireguard.cat"
 wireguard.inf RCDATA "driver\\wireguard.inf"
 wireguard.sys RCDATA "driver\\wireguard.sys"
 
+downlevelshim.dll RCDATA "downlevelshim.dll"
+
 #if defined(WANT_AMD64_WOW64)
 #    if defined(BUILT_AMD64_WOW64)
 wireguard-amd64.dll RCDATA "amd64\\wireguard.dll"
