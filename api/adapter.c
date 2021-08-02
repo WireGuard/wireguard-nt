@@ -6,7 +6,6 @@
 #include <WinSock2.h>
 #include <Windows.h>
 #include <winternl.h>
-#include <wincrypt.h>
 #include <cfgmgr32.h>
 #include <devguid.h>
 #include <ws2tcpip.h>
@@ -890,90 +889,6 @@ AdapterOpenDeviceObject(const WIREGUARD_ADAPTER *Adapter)
     return OpenDeviceObject(Adapter->DevInstanceID);
 }
 
-static BOOL HaveWHQL(VOID)
-{
-#if defined(HAVE_WHQL)
-    return IsWindows10;
-#else
-    return FALSE;
-#endif
-}
-
-static _Return_type_success_(return != FALSE)
-BOOL
-InstallCertificate(_In_z_ LPCWSTR SignedResource)
-{
-    LOG(WIREGUARD_LOG_INFO, L"Trusting code signing certificate");
-    DWORD SizeResource;
-    const VOID *LockedResource = ResourceGetAddress(SignedResource, &SizeResource);
-    if (!LockedResource)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Failed to locate resource %s", SignedResource);
-        return FALSE;
-    }
-    const CERT_BLOB CertBlob = { .cbData = SizeResource, .pbData = (BYTE *)LockedResource };
-    HCERTSTORE QueriedStore;
-    if (!CryptQueryObject(
-            CERT_QUERY_OBJECT_BLOB,
-            &CertBlob,
-            CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED,
-            CERT_QUERY_FORMAT_FLAG_ALL,
-            0,
-            0,
-            0,
-            0,
-            &QueriedStore,
-            0,
-            NULL))
-    {
-        LOG_LAST_ERROR(L"Failed to find certificate");
-        return FALSE;
-    }
-    DWORD LastError = ERROR_SUCCESS;
-    HCERTSTORE TrustedStore =
-        CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, 0, CERT_SYSTEM_STORE_LOCAL_MACHINE, L"TrustedPublisher");
-    if (!TrustedStore)
-    {
-        LastError = LOG_LAST_ERROR(L"Failed to open store");
-        goto cleanupQueriedStore;
-    }
-    LPSTR CodeSigningOid[] = { szOID_PKIX_KP_CODE_SIGNING };
-    CERT_ENHKEY_USAGE EnhancedUsage = { .cUsageIdentifier = 1, .rgpszUsageIdentifier = CodeSigningOid };
-    for (const CERT_CONTEXT *CertContext = NULL; (CertContext = CertFindCertificateInStore(
-                                                      QueriedStore,
-                                                      X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
-                                                      CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG,
-                                                      CERT_FIND_ENHKEY_USAGE,
-                                                      &EnhancedUsage,
-                                                      CertContext)) != NULL;)
-    {
-        CERT_EXTENSION *Ext = CertFindExtension(
-            szOID_BASIC_CONSTRAINTS2, CertContext->pCertInfo->cExtension, CertContext->pCertInfo->rgExtension);
-        CERT_BASIC_CONSTRAINTS2_INFO Constraints;
-        DWORD Size = sizeof(Constraints);
-        if (Ext &&
-            CryptDecodeObjectEx(
-                X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
-                szOID_BASIC_CONSTRAINTS2,
-                Ext->Value.pbData,
-                Ext->Value.cbData,
-                0,
-                NULL,
-                &Constraints,
-                &Size) &&
-            !Constraints.fCA)
-            if (!CertAddCertificateContextToStore(TrustedStore, CertContext, CERT_STORE_ADD_REPLACE_EXISTING, NULL))
-            {
-                LOG_LAST_ERROR(L"Failed to add certificate to store");
-                LastError = LastError != ERROR_SUCCESS ? LastError : GetLastError();
-            }
-    }
-    CertCloseStore(TrustedStore, 0);
-cleanupQueriedStore:
-    CertCloseStore(QueriedStore, 0);
-    return RET_ERROR(TRUE, LastError);
-}
-
 static BOOL
 IsOurDrvInfoDetail(_In_ const SP_DRVINFO_DETAIL_DATA_W *DrvInfoDetailData)
 {
@@ -1308,14 +1223,9 @@ SelectDriver(
         goto cleanupDirectory;
     }
 
-    BOOL UseWHQL = HaveWHQL();
-    if (!UseWHQL && !InstallCertificate(L"wireguard.cat"))
-        LOG(WIREGUARD_LOG_WARN, L"Failed to install code signing certificate");
-
     LOG(WIREGUARD_LOG_INFO, L"Extracting driver");
-    if (!ResourceCopyToFile(CatPath, UseWHQL ? L"wireguard-whql.cat" : L"wireguard.cat") ||
-        !ResourceCopyToFile(SysPath, UseWHQL ? L"wireguard-whql.sys" : L"wireguard.sys") ||
-        !ResourceCopyToFile(InfPath, UseWHQL ? L"wireguard-whql.inf" : L"wireguard.inf"))
+    if (!ResourceCopyToFile(CatPath, L"wireguard.cat") || !ResourceCopyToFile(SysPath, L"wireguard.sys") ||
+        !ResourceCopyToFile(InfPath, L"wireguard.inf"))
     {
         LastError = LOG_LAST_ERROR(L"Failed to extract driver");
         goto cleanupDelete;

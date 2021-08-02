@@ -12,12 +12,6 @@ wireguard.cat RCDATA "driver\\wireguard.cat"
 wireguard.inf RCDATA "driver\\wireguard.inf"
 wireguard.sys RCDATA "driver\\wireguard.sys"
 
-#ifdef HAVE_WHQL
-wireguard-whql.cat RCDATA "whql\\wireguard.cat"
-wireguard-whql.inf RCDATA "whql\\wireguard.inf"
-wireguard-whql.sys RCDATA "whql\\wireguard.sys"
-#endif
-
 #if defined(WANT_AMD64_WOW64)
 #    if defined(BUILT_AMD64_WOW64)
 wireguard-amd64.dll RCDATA "amd64\\wireguard.dll"
