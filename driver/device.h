@@ -73,7 +73,6 @@ typedef struct _WG_DEVICE
     NDIS_HANDLE MiniportAdapterHandle; /* This is actually a pointer to NDIS_MINIPORT_BLOCK struct. */
     DEVICE_OBJECT *FunctionalDeviceObject;
     NDIS_STATISTICS_INFO Statistics;
-    NDIS_HANDLE NblPool, NbPool;
     EX_RUNDOWN_REF ItemsInFlight;
     PTR_RING EncryptQueue, DecryptQueue;
     PEER_SERIAL TxQueue, RxQueue, HandshakeTxQueue;

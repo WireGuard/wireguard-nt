@@ -125,9 +125,15 @@ _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 PacketReceive(_Inout_ WG_DEVICE *Wg, _In_ __drv_aliasesMem NET_BUFFER_LIST *First);
 
+MINIPORT_RETURN_NET_BUFFER_LISTS ReturnNetBufferLists;
+
 _IRQL_requires_max_(DISPATCH_LEVEL)
-VOID
-FreeReceiveNetBufferList(_Inout_ WG_DEVICE *Wg, __drv_freesMem(Mem) _In_ NET_BUFFER_LIST *First);
+static inline VOID
+FreeReceiveNetBufferList(_In_ NET_BUFFER_LIST *First)
+{
+    if (First)
+        ReturnNetBufferLists(First->SourceHandle, First, 0);
+}
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID

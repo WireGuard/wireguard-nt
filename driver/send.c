@@ -247,8 +247,7 @@ PacketSendKeepalive(WG_PEER *Peer)
 
     if (NetBufferListIsQueueEmpty(&Peer->StagedPacketQueue))
     {
-        Nbl = MemAllocateNetBufferList(
-            Peer->Device->NblPool, Peer->Device->NbPool, 0, 0, sizeof(MESSAGE_DATA) + NoiseEncryptedLen(0));
+        Nbl = MemAllocateNetBufferList(0, 0, sizeof(MESSAGE_DATA) + NoiseEncryptedLen(0));
         if (!Nbl)
             return;
         Nbl->ParentNetBufferList = Nbl;
@@ -506,7 +505,7 @@ FreeSendNetBufferList(WG_DEVICE *Wg, NET_BUFFER_LIST *FirstNbl, ULONG SendComple
     {
         NextNbl = NET_BUFFER_LIST_NEXT_NBL(Nbl);
         NET_BUFFER_LIST_NEXT_NBL(Nbl) = NULL;
-        if (Nbl->NdisPoolHandle == Wg->NblPool)
+        if (MemNetBufferListIsOurs(Nbl))
         {
             if (Nbl->ParentNetBufferList != Nbl)
             {

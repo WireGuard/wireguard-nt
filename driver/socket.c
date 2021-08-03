@@ -613,7 +613,7 @@ Receive(_In_opt_ PVOID SocketContext, _In_ ULONG Flags, _In_opt_ WSK_DATAGRAM_IN
         ULONG Length;
         if (!NT_SUCCESS(RtlSIZETToULong(DataIndication->Buffer.Length, &Length)))
             goto skipDatagramIndication;
-        Nbl = MemAllocateNetBufferList(Wg->NblPool, Wg->NbPool, 0, Length, 0);
+        Nbl = MemAllocateNetBufferList(0, Length, 0);
         if (!Nbl || !ReadBooleanNoFence(&Wg->IsUp) || !ExAcquireRundownProtection(&Socket->ItemsInFlight))
             goto skipDatagramIndication;
         NET_BUFFER_LIST_DATAGRAM_INDICATION(Nbl) = DataIndication;

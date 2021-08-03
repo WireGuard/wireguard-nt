@@ -160,7 +160,7 @@ SendNetBufferLists(
         }
 
         NET_BUFFER_LIST *CloneNbl = MemAllocateNetBufferListWithClonedGeometry(
-            Wg->NblPool, Wg->NbPool, Nbl, sizeof(MESSAGE_DATA) + NoiseEncryptedLen(0) + MESSAGE_PADDING_MULTIPLE - 1);
+            Nbl, sizeof(MESSAGE_DATA) + NoiseEncryptedLen(0) + MESSAGE_PADDING_MULTIPLE - 1);
         if (!CloneNbl)
         {
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_RESOURCES;
@@ -253,15 +253,6 @@ _Use_decl_annotations_
 static VOID
 CancelSend(NDIS_HANDLE MiniportAdapterContext, PVOID CancelId)
 {
-}
-
-static MINIPORT_RETURN_NET_BUFFER_LISTS ReturnNetBufferLists;
-_Use_decl_annotations_
-static VOID
-ReturnNetBufferLists(NDIS_HANDLE MiniportAdapterContext, PNET_BUFFER_LIST NetBufferLists, ULONG ReturnFlags)
-{
-    WG_DEVICE *Wg = (WG_DEVICE *)MiniportAdapterContext;
-    FreeReceiveNetBufferList(Wg, NetBufferLists);
 }
 
 static EX_CALLBACK_FUNCTION MtuRegistryChange;
@@ -396,8 +387,6 @@ HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
     MemFree(Wg->PeerHashtable);
     MuReleasePushLockExclusive(&Wg->DeviceUpdateLock);
 
-    NdisFreeNetBufferPool(Wg->NbPool);
-    NdisFreeNetBufferListPool(Wg->NblPool);
     WritePointerNoFence(&Wg->MiniportAdapterHandle, NULL);
     LogInfo(Wg, "Interface destroyed");
     MemFree(Wg);
@@ -567,30 +556,6 @@ InitializeEx(
      * Revisit this when we drop support for old Windows versions. */
     Wg->FunctionalDeviceObject->Reserved = Wg;
 
-    NET_BUFFER_LIST_POOL_PARAMETERS NblPoolParameters = {
-        .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                    .Revision = NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1,
-                    .Size = NDIS_SIZEOF_NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1 },
-        .ProtocolId = NDIS_PROTOCOL_ID_DEFAULT,
-        .PoolTag = MEMORY_TAG
-    };
-    Wg->NblPool = NdisAllocateNetBufferListPool(MiniportAdapterHandle, &NblPoolParameters);
-    if (!Wg->NblPool)
-    {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto cleanupWg;
-    }
-    NET_BUFFER_POOL_PARAMETERS NbPoolParameters = { .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                                                                .Revision = NET_BUFFER_POOL_PARAMETERS_REVISION_1,
-                                                                .Size =
-                                                                    NDIS_SIZEOF_NET_BUFFER_POOL_PARAMETERS_REVISION_1 },
-                                                    .PoolTag = MEMORY_TAG };
-    Wg->NbPool = NdisAllocateNetBufferPool(MiniportAdapterHandle, &NbPoolParameters);
-    if (!Wg->NbPool)
-    {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto cleanupNblPool;
-    }
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
     ExRundownCompleted(&Wg->ItemsInFlight); /* Wait until Restart is called to mark this active. */
 
@@ -609,7 +574,7 @@ InitializeEx(
 
     Wg->PeerHashtable = PubkeyHashtableAlloc();
     if (!Wg->PeerHashtable)
-        goto cleanupNbPool;
+        goto cleanupWg;
 
     Wg->IndexHashtable = IndexHashtableAlloc();
     if (!Wg->IndexHashtable)
@@ -689,10 +654,6 @@ cleanupIndexHashtable:
     MemFree(Wg->IndexHashtable);
 cleanupPeerHashtable:
     MemFree(Wg->PeerHashtable);
-cleanupNbPool:
-    NdisFreeNetBufferPool(Wg->NbPool);
-cleanupNblPool:
-    NdisFreeNetBufferListPool(Wg->NblPool);
 cleanupWg:
     MemFree(Wg);
     if (Status == STATUS_INSUFFICIENT_RESOURCES)

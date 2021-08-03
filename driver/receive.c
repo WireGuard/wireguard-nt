@@ -152,7 +152,7 @@ PacketHandshakeRxWorker(MULTICORE_WORKQUEUE *WorkQueue)
     while ((Nbl = NetBufferListInterlockedDequeue(&Wg->HandshakeRxQueue)) != NULL)
     {
         ReceiveHandshakePacket(Wg, Nbl);
-        FreeReceiveNetBufferList(Wg, Nbl);
+        FreeReceiveNetBufferList(Nbl);
     }
 }
 
@@ -367,7 +367,7 @@ falsePacket:
     ++Peer->Device->Statistics.ifInErrors;
     ++Peer->Device->Statistics.ifInDiscards;
 packetProcessed:
-    FreeReceiveNetBufferList(Peer->Device, Nbl);
+    FreeReceiveNetBufferList(Nbl);
     return FALSE;
 }
 
@@ -419,7 +419,7 @@ PacketPeerRxWork(_Inout_ WG_PEER *Peer, _In_ ULONG Budget)
     next:
         NoiseKeypairPut(Keypair, FALSE);
         if (Free)
-            FreeReceiveNetBufferList(Peer->Device, Nbl);
+            FreeReceiveNetBufferList(Nbl);
         ExReleaseRundownProtection(&Peer->InUse);
         PeerPut(Peer);
     }
@@ -503,7 +503,7 @@ PacketConsumeData(_Inout_ WG_DEVICE *Wg, _Inout_ __drv_aliasesMem NET_BUFFER_LIS
     cleanupKeypair:
         NoiseKeypairPut(Keypair, FALSE);
     cleanupNbl:
-        FreeReceiveNetBufferList(Wg, Nbl);
+        FreeReceiveNetBufferList(Nbl);
         PeerPut(Peer);
     }
     if (FirstForDevice && !QueueEnqueuePerDevice(&Wg->DecryptQueue, &Wg->DecryptThreads, FirstForDevice))
@@ -600,7 +600,7 @@ PacketReceive(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
         continue;
 
     cleanup:
-        FreeReceiveNetBufferList(Wg, Nbl);
+        FreeReceiveNetBufferList(Nbl);
     }
 
     if (FirstData)
@@ -609,7 +609,7 @@ PacketReceive(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
 
 _Use_decl_annotations_
 VOID
-FreeReceiveNetBufferList(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
+ReturnNetBufferLists(NDIS_HANDLE MiniportAdapterContext, PNET_BUFFER_LIST First, ULONG ReturnFlags)
 {
     for (NET_BUFFER_LIST *Nbl = First, *NextNbl; Nbl; Nbl = NextNbl)
     {
@@ -630,5 +630,5 @@ FreeIncomingHandshakes(WG_DEVICE *Wg)
 {
     NET_BUFFER_LIST *Nbl;
     while ((Nbl = NetBufferListInterlockedDequeue(&Wg->HandshakeRxQueue)) != NULL)
-        FreeReceiveNetBufferList(Wg, Nbl);
+        FreeReceiveNetBufferList(Nbl);
 }

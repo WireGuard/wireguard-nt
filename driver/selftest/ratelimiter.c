@@ -146,42 +146,24 @@ RatelimiterSelftest(VOID)
     IPV4HDR *Hdr4;
     IPV6HDR *Hdr6 = NULL;
 
-    NET_BUFFER_LIST_POOL_PARAMETERS NblPoolParameters = {
-        .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                    .Revision = NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1,
-                    .Size = NDIS_SIZEOF_NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1 },
-        .ProtocolId = NDIS_PROTOCOL_ID_DEFAULT,
-        .PoolTag = MEMORY_TAG
-    };
-    NDIS_HANDLE NblPool = NdisAllocateNetBufferListPool(NULL, &NblPoolParameters);
-    if (!NblPool)
-        goto out;
-    NET_BUFFER_POOL_PARAMETERS NbPoolParameters = { .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                                                                .Revision = NET_BUFFER_POOL_PARAMETERS_REVISION_1,
-                                                                .Size =
-                                                                    NDIS_SIZEOF_NET_BUFFER_POOL_PARAMETERS_REVISION_1 },
-                                                    .PoolTag = MEMORY_TAG };
-    NDIS_HANDLE NbPool = NdisAllocateNetBufferPool(NULL, &NbPoolParameters);
-    if (!NbPool)
-        goto cleanupNblPool;
     ++Test;
     ++Test;
     ++Test;
 
-    Nbl4 = MemAllocateNetBufferList(NblPool, NbPool, 0, sizeof(*Hdr4), 0);
+    Nbl4 = MemAllocateNetBufferList(0, sizeof(*Hdr4), 0);
     if (!Nbl4)
-        goto cleanupNofree;
+        goto out;
     NdisSetNblFlag(Nbl4, NDIS_NBL_FLAGS_IS_IPV4);
     NET_BUFFER_LIST_INFO(Nbl4, NetBufferListProtocolId) = (VOID *)Htons(NDIS_ETH_TYPE_IPV4);
     Hdr4 = MemGetValidatedNetBufferListData(Nbl4);
     Hdr4->Saddr = Htonl(8182);
     ++Test;
 
-    Nbl6 = MemAllocateNetBufferList(NblPool, NbPool, 0, sizeof(*Hdr6), 0);
+    Nbl6 = MemAllocateNetBufferList(0, sizeof(*Hdr6), 0);
     if (!Nbl6)
     {
         MemFreeNetBufferList(Nbl4);
-        goto cleanupNofree;
+        goto out;
     }
     NdisSetNblFlag(Nbl6, NDIS_NBL_FLAGS_IS_IPV6);
     NET_BUFFER_LIST_INFO(Nbl6, NetBufferListProtocolId) = (VOID *)Htons(NDIS_ETH_TYPE_IPV6);
@@ -241,10 +223,6 @@ RatelimiterSelftest(VOID)
 cleanup:
     MemFreeNetBufferList(Nbl4);
     MemFreeNetBufferList(Nbl6);
-cleanupNofree:
-    NdisFreeNetBufferPool(NbPool);
-cleanupNblPool:
-    NdisFreeNetBufferListPool(NblPool);
 out:
     if (Success)
         LogDebug("ratelimiter self-tests: pass");
