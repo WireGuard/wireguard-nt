@@ -319,7 +319,7 @@ retry:
     }
     else
         BestIndex = 0;
-    ++Endpoint->UpdateGeneration;
+    ++Endpoint->UpdateGeneration, ++UpdateGeneration;
     ExReleaseSpinLockExclusive(&Peer->EndpointLock, *Irql);
     if (!BestIndex)
         return STATUS_BAD_NETWORK_PATH;
