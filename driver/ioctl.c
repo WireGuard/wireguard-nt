@@ -156,10 +156,15 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
             KIRQL Irql;
             Irql = ExAcquireSpinLockShared(&Peer->EndpointLock);
             if (Peer->Endpoint.Addr.si_family == AF_INET)
+            {
                 IoctlPeer->Endpoint.Ipv4 = Peer->Endpoint.Addr.Ipv4;
+                IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_ENDPOINT;
+            }
             else if (Peer->Endpoint.Addr.si_family == AF_INET6)
+            {
                 IoctlPeer->Endpoint.Ipv6 = Peer->Endpoint.Addr.Ipv6;
-            IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_ENDPOINT;
+                IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_ENDPOINT;
+            }
             ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
         }
 
