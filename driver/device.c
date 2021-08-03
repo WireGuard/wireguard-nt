@@ -604,7 +604,6 @@ InitializeEx(
     AllowedIpsInit(&Wg->PeerAllowedIps);
     CookieCheckerInit(&Wg->CookieChecker, Wg);
     InitializeListHead(&Wg->PeerList);
-    Wg->DeviceUpdateGen = 1;
 
     Status = STATUS_INSUFFICIENT_RESOURCES;
 

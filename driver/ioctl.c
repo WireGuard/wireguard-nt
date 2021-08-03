@@ -393,8 +393,6 @@ SetInterface(
 
     MuAcquirePushLockExclusive(&Wg->DeviceUpdateLock);
 
-    ++Wg->DeviceUpdateGen;
-
     NTSTATUS Status;
     if (IoctlInterface.Flags & WG_IOCTL_INTERFACE_HAS_LISTEN_PORT)
     {

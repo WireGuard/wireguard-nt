@@ -88,7 +88,7 @@ typedef struct _WG_DEVICE
     ALLOWEDIPS_TABLE PeerAllowedIps;
     EX_PUSH_LOCK DeviceUpdateLock, SocketUpdateLock;
     LIST_ENTRY PeerList;
-    ULONG NumPeers, DeviceUpdateGen;
+    ULONG NumPeers;
     NET_IFINDEX InterfaceIndex;
     NET_LUID InterfaceLuid;
     PEPROCESS SocketOwnerProcess;
