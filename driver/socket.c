@@ -262,11 +262,14 @@ retry:
         if (Endpoint->Addr.si_family == AF_INET6 &&
             !CidrMaskMatchV6(&Endpoint->Addr.Ipv6.sin6_addr, &Table->Table[i].DestinationPrefix))
             continue;
-        MIB_IPINTERFACE_ROW Interface = { .Family = Endpoint->Addr.si_family,
-                                          .InterfaceLuid = Table->Table[i].InterfaceLuid };
-        if (!NT_SUCCESS(GetIpInterfaceEntry(&Interface)))
+        MIB_IF_ROW2 Interface = { .InterfaceLuid = Table->Table[i].InterfaceLuid };
+        if (!NT_SUCCESS(GetIfEntry2(&Interface)) || Interface.OperStatus != IfOperStatusUp)
             continue;
-        ULONG Metric = Table->Table[i].Metric + Interface.Metric;
+        MIB_IPINTERFACE_ROW IpInterface = { .Family = Endpoint->Addr.si_family,
+                                            .InterfaceLuid = Table->Table[i].InterfaceLuid };
+        if (!NT_SUCCESS(GetIpInterfaceEntry(&IpInterface)))
+            continue;
+        ULONG Metric = Table->Table[i].Metric + IpInterface.Metric;
         if (Table->Table[i].DestinationPrefix.PrefixLength == BestCidr && Metric > BestMetric)
             continue;
         BestCidr = Table->Table[i].DestinationPrefix.PrefixLength;
