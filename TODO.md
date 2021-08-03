@@ -38,5 +38,14 @@ Reference: https://docs.microsoft.com/sl-si/windows-hardware/drivers/devtest/sta
 
 ### WHQL
 
+### Fix MTU notification
+- Currently, `NotifyIpInterfaceChange` fails to report MTU updates, so we
+  install a global registry hook on the tcpip service MTU key and look for
+  changes to that, since `netsh` and `set-netipinterface` both modify that.
+  However, `SetIPInterfaceEntry` fails to update that, which means we have no
+  way of being notified when the normal iphlpapi APIs are used. We're hacking
+  around it now in wireguard-windows by setting that registry key, but this
+  is not a very good situation. We'll have to look for another trick.
+
 #### DVL and Static Tools Logo Test
 - Recent (E)WDK DVL always includes CodeQL test results. Even if "NORUN". WHQL 1809 does not support CodeQL test results in DVL and fails Static Tools Logo Test. Those two are in conflict. Either downgrade (E)WDK, or upgrade WHQL rig.
