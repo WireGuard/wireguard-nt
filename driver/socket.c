@@ -200,7 +200,7 @@ static BOOLEAN
 CidrMaskMatchV4(_In_ CONST IN_ADDR *Addr, _In_ CONST IP_ADDRESS_PREFIX *Prefix)
 {
     return Prefix->PrefixLength == 0 ||
-           (Addr->s_addr & (~0U << (32 - Prefix->PrefixLength))) == Prefix->Prefix.Ipv4.sin_addr.s_addr;
+           (Addr->s_addr & (Htonl(~0U << (32 - Prefix->PrefixLength)))) == Prefix->Prefix.Ipv4.sin_addr.s_addr;
 }
 
 static BOOLEAN
@@ -214,7 +214,7 @@ CidrMaskMatchV6(_In_ CONST IN6_ADDR *Addr, _In_ CONST IP_ADDRESS_PREFIX *Prefix)
         return FALSE;
     if (WholeParts == 4 || LeftoverBits == 0)
         return TRUE;
-    return (((UINT32 *)Addr)[WholeParts] & (~0U << (32 - LeftoverBits))) ==
+    return (((UINT32 *)Addr)[WholeParts] & Htonl(~0U << (32 - LeftoverBits))) ==
            ((UINT32 *)&Prefix->Prefix.Ipv6.sin6_addr)[WholeParts];
 }
 
