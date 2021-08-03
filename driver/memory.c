@@ -8,7 +8,7 @@
 
 static CONST ULONG PacketCacheSizes[] = { 192, 512, 1024, 1500, 9000 };
 static LOOKASIDE_ALIGN LOOKASIDE_LIST_EX PacketCaches[ARRAYSIZE(PacketCacheSizes)];
-static NDIS_HANDLE NblPool, NbPool;
+static NDIS_HANDLE LooseNblPool, LooseNbPool, NblDataPools[ARRAYSIZE(PacketCacheSizes)];
 
 _Must_inspect_result_
 _IRQL_requires_max_(DISPATCH_LEVEL)
@@ -83,14 +83,28 @@ MemAllocateNetBufferList(ULONG SpaceBefore, ULONG Size, ULONG SpaceAfter)
     if (!NT_SUCCESS(RtlULongAdd(Sum, SpaceBefore, &Sum) || !NT_SUCCESS(RtlULongAdd(Sum, SpaceAfter, &Sum))) ||
         Sum > MTU_MAX)
         return NULL;
+    for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
+    {
+        if (PacketCacheSizes[i] >= Sum)
+        {
+            NET_BUFFER_LIST *Nbl = NdisAllocateNetBufferList(NblDataPools[i], 0, 0);
+            if (!Nbl)
+                return NULL;
+            NET_BUFFER_DATA_LENGTH(NET_BUFFER_LIST_FIRST_NB(Nbl)) = Size;
+            NET_BUFFER_DATA_OFFSET(NET_BUFFER_LIST_FIRST_NB(Nbl)) =
+                NET_BUFFER_CURRENT_MDL_OFFSET(NET_BUFFER_LIST_FIRST_NB(Nbl)) = SpaceBefore;
+            return Nbl;
+        }
+    }
+
 #pragma warning(suppress : 6014) /* MDL is aliased in Nbl or freed on failure. */
     MDL *Mdl = MemAllocateDataAndMdlChain(Sum);
     if (!Mdl)
         return NULL;
-    NET_BUFFER *Nb = NdisAllocateNetBuffer(NbPool, Mdl, SpaceBefore, Size);
+    NET_BUFFER *Nb = NdisAllocateNetBuffer(LooseNbPool, Mdl, SpaceBefore, Size);
     if (!Nb)
         goto cleanupMdl;
-    NET_BUFFER_LIST *Nbl = NdisAllocateNetBufferList(NblPool, 0, 0);
+    NET_BUFFER_LIST *Nbl = NdisAllocateNetBufferList(LooseNblPool, 0, 0);
     if (!Nbl)
         goto cleanupNb;
     NET_BUFFER_LIST_FIRST_NB(Nbl) = Nb;
@@ -107,12 +121,15 @@ _Use_decl_annotations_
 VOID
 MemFreeNetBufferList(NET_BUFFER_LIST *Nbl)
 {
-    while (NET_BUFFER_LIST_FIRST_NB(Nbl))
+    if (Nbl->NdisPoolHandle == LooseNblPool)
     {
-        NET_BUFFER *Nb = NET_BUFFER_LIST_FIRST_NB(Nbl);
-        NET_BUFFER_LIST_FIRST_NB(Nbl) = NET_BUFFER_NEXT_NB(NET_BUFFER_LIST_FIRST_NB(Nbl));
-        MemFreeDataAndMdlChain(NET_BUFFER_FIRST_MDL(Nb));
-        NdisFreeNetBuffer(Nb);
+        while (NET_BUFFER_LIST_FIRST_NB(Nbl))
+        {
+            NET_BUFFER *Nb = NET_BUFFER_LIST_FIRST_NB(Nbl);
+            NET_BUFFER_LIST_FIRST_NB(Nbl) = NET_BUFFER_NEXT_NB(NET_BUFFER_LIST_FIRST_NB(Nbl));
+            MemFreeDataAndMdlChain(NET_BUFFER_FIRST_MDL(Nb));
+            NdisFreeNetBuffer(Nb);
+        }
     }
     NdisFreeNetBufferList(Nbl);
 }
@@ -120,11 +137,9 @@ MemFreeNetBufferList(NET_BUFFER_LIST *Nbl)
 #pragma warning(suppress : 28195) /* NdisAllocateNetBufferList & co allocate. */
 _Use_decl_annotations_
 NET_BUFFER_LIST *
-MemAllocateNetBufferListWithClonedGeometry(
-    NET_BUFFER_LIST *Original,
-    ULONG AdditionalBytesPerNb)
+MemAllocateNetBufferListWithClonedGeometry(NET_BUFFER_LIST *Original, ULONG AdditionalBytesPerNb)
 {
-    NET_BUFFER_LIST *Clone = NdisAllocateNetBufferList(NblPool, 0, 0);
+    NET_BUFFER_LIST *Clone = NdisAllocateNetBufferList(LooseNblPool, 0, 0);
     if (!Clone)
         return NULL;
     NET_BUFFER_LIST_INFO(Clone, NetBufferListProtocolId) = NET_BUFFER_LIST_INFO(Original, NetBufferListProtocolId);
@@ -139,7 +154,7 @@ MemAllocateNetBufferListWithClonedGeometry(
         MDL *CloneMdl = MemAllocateDataAndMdlChain(Length);
         if (!CloneMdl)
             goto cleanupClone;
-        *CloneNb = NdisAllocateNetBuffer(NbPool, CloneMdl, 0, 0);
+        *CloneNb = NdisAllocateNetBuffer(LooseNbPool, CloneMdl, 0, 0);
         if (!*CloneNb)
         {
             MemFreeDataAndMdlChain(CloneMdl);
@@ -159,7 +174,14 @@ _Use_decl_annotations_
 BOOLEAN
 MemNetBufferListIsOurs(NET_BUFFER_LIST *Nbl)
 {
-    return Nbl->NdisPoolHandle == NblPool;
+    if (Nbl->NdisPoolHandle == LooseNblPool)
+        return TRUE;
+    for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
+    {
+        if (Nbl->NdisPoolHandle == NblDataPools[i])
+            return TRUE;
+    }
+    return FALSE;
 }
 
 _Use_decl_annotations_
@@ -208,29 +230,51 @@ MemDriverEntry(VOID)
             return Status;
         }
     }
-
-    NET_BUFFER_LIST_POOL_PARAMETERS NblPoolParameters = {
+    for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
+    {
+        NET_BUFFER_LIST_POOL_PARAMETERS NblDataPoolParameters = {
+            .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
+                        .Revision = NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1,
+                        .Size = NDIS_SIZEOF_NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1 },
+            .ProtocolId = NDIS_PROTOCOL_ID_DEFAULT,
+            .PoolTag = MEMORY_TAG,
+            .fAllocateNetBuffer = TRUE,
+            .DataSize = PacketCacheSizes[i]
+        };
+        NblDataPools[i] = NdisAllocateNetBufferListPool(NULL, &NblDataPoolParameters);
+        if (!NblDataPools[i])
+        {
+            for (ULONG j = 0; j < i; ++j)
+                NdisFreeNetBufferListPool(NblDataPools[j]);
+            goto cleanupPacketCaches;
+        }
+    }
+    NET_BUFFER_LIST_POOL_PARAMETERS LooseNblPoolParameters = {
         .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
                     .Revision = NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1,
                     .Size = NDIS_SIZEOF_NET_BUFFER_LIST_POOL_PARAMETERS_REVISION_1 },
         .ProtocolId = NDIS_PROTOCOL_ID_DEFAULT,
         .PoolTag = MEMORY_TAG
     };
-    NblPool = NdisAllocateNetBufferListPool(NULL, &NblPoolParameters);
-    if (!NblPool)
-        goto cleanupPacketCaches;
-    NET_BUFFER_POOL_PARAMETERS NbPoolParameters = { .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                                                                .Revision = NET_BUFFER_POOL_PARAMETERS_REVISION_1,
-                                                                .Size =
-                                                                    NDIS_SIZEOF_NET_BUFFER_POOL_PARAMETERS_REVISION_1 },
-                                                    .PoolTag = MEMORY_TAG };
-    NbPool = NdisAllocateNetBufferPool(NULL, &NbPoolParameters);
-    if (!NbPool)
-        goto cleanupNblPool;
+    LooseNblPool = NdisAllocateNetBufferListPool(NULL, &LooseNblPoolParameters);
+    if (!LooseNblPool)
+        goto cleanupNblDataPools;
+    NET_BUFFER_POOL_PARAMETERS LooseNbPoolParameters = {
+        .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
+                    .Revision = NET_BUFFER_POOL_PARAMETERS_REVISION_1,
+                    .Size = NDIS_SIZEOF_NET_BUFFER_POOL_PARAMETERS_REVISION_1 },
+        .PoolTag = MEMORY_TAG
+    };
+    LooseNbPool = NdisAllocateNetBufferPool(NULL, &LooseNbPoolParameters);
+    if (!LooseNbPool)
+        goto cleanupLooseNblPool;
     return STATUS_SUCCESS;
 
-cleanupNblPool:
-    NdisFreeNetBufferListPool(NblPool);
+cleanupLooseNblPool:
+    NdisFreeNetBufferListPool(LooseNblPool);
+cleanupNblDataPools:
+    for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
+        NdisFreeNetBufferListPool(NblDataPools[i]);
 cleanupPacketCaches:
     for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
         ExDeleteLookasideListEx(&PacketCaches[i]);
@@ -240,8 +284,10 @@ cleanupPacketCaches:
 _Use_decl_annotations_
 VOID MemUnload(VOID)
 {
-    NdisFreeNetBufferPool(NbPool);
-    NdisFreeNetBufferListPool(NblPool);
+    NdisFreeNetBufferPool(LooseNbPool);
+    NdisFreeNetBufferListPool(LooseNblPool);
+    for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
+        NdisFreeNetBufferListPool(NblDataPools[i]);
     for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
         ExDeleteLookasideListEx(&PacketCaches[i]);
 }
