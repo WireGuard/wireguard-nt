@@ -109,7 +109,7 @@ PeerSerialDequeue(_Inout_ PEER_SERIAL *Serial)
  * NBL[1] = prev queue link
  * NB[0-1] = nonce
  * NB[2] = keypair
- * NB[3] = <empty>
+ * NB[3] = wsk datagram indication (rx only)
  */
 #define NET_BUFFER_NONCE(Nb) (*(UINT64 *)&NET_BUFFER_MINIPORT_RESERVED(Nb)[0])
 #define NET_BUFFER_LIST_KEYPAIR(Nbl) \
@@ -118,7 +118,7 @@ PeerSerialDequeue(_Inout_ PEER_SERIAL *Serial)
 #define NET_BUFFER_LIST_CRYPT_STATE(Nbl) ((LONG *)&NET_BUFFER_LIST_MINIPORT_RESERVED(Nbl)[0])
 #define NET_BUFFER_LIST_PER_PEER_LIST_LINK(Nbl) (*(NET_BUFFER_LIST **)&NET_BUFFER_LIST_MINIPORT_RESERVED(Nbl)[1])
 #define NET_BUFFER_LIST_PROTOCOL(Nbl) ((UINT16_BE)(ULONG_PTR)NET_BUFFER_LIST_INFO(Nbl, NetBufferListProtocolId))
-#define NET_BUFFER_LIST_DATAGRAM_INDICATION(Nbl) (*(WSK_DATAGRAM_INDICATION **)&Nbl->ParentNetBufferList)
+#define NET_BUFFER_LIST_DATAGRAM_INDICATION(Nbl) (*(WSK_DATAGRAM_INDICATION **)&NET_BUFFER_MINIPORT_RESERVED(NET_BUFFER_LIST_FIRST_NB(Nbl))[3])
 
 /* receive.c APIs: */
 _IRQL_requires_max_(DISPATCH_LEVEL)

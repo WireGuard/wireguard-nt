@@ -616,7 +616,6 @@ FreeReceiveNetBufferList(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
         NextNbl = NET_BUFFER_LIST_NEXT_NBL(Nbl);
         NET_BUFFER_LIST_NEXT_NBL(Nbl) = NULL;
         WSK_DATAGRAM_INDICATION *DatagramIndication = NET_BUFFER_LIST_DATAGRAM_INDICATION(Nbl);
-        NET_BUFFER_LIST_DATAGRAM_INDICATION(Nbl) = NULL;
         SOCKET *Socket = (SOCKET *)DatagramIndication->Next;
         DatagramIndication->Next = NULL;
         ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskRelease(Socket->Sock, DatagramIndication);
