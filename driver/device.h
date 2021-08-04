@@ -93,9 +93,7 @@ typedef struct _WG_DEVICE
     PEPROCESS SocketOwnerProcess;
     UINT16 IncomingPort;
     BOOLEAN IsUp, IsDeviceRemoving;
-    PVOID MtuRegistryKeyObject;
-    LARGE_INTEGER MtuRegistryNotifier;
-    ULONG Mtu;
+    ULONG Mtu4, Mtu6;
     LOG_RING Log;
     LIST_ENTRY DeviceList;
     KEVENT DeviceRemoved;

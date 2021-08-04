@@ -330,7 +330,7 @@ PacketEncryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
         PACKET_STATE State = PACKET_STATE_CRYPTED;
         NOISE_KEYPAIR *Keypair = NET_BUFFER_LIST_KEYPAIR(First);
         WG_PEER *Peer = NET_BUFFER_LIST_PEER(First);
-        ULONG Mtu = ReadULongNoFence(&Wg->Mtu);
+        ULONG Mtu = Peer->Endpoint.Addr.si_family == AF_INET6 ? Wg->Mtu6 : Wg->Mtu4;
 
         for (NET_BUFFER_LIST *Nbl = First; Nbl; Nbl = NET_BUFFER_LIST_NEXT_NBL(Nbl))
         {

@@ -29,6 +29,7 @@
 
 static UINT NdisVersion;
 static NDIS_HANDLE NdisMiniportDriverHandle;
+static HANDLE IpInterfaceNotifier;
 LIST_ENTRY DeviceList;
 EX_PUSH_LOCK DeviceListLock;
 
@@ -255,102 +256,51 @@ CancelSend(NDIS_HANDLE MiniportAdapterContext, PVOID CancelId)
 {
 }
 
-static EX_CALLBACK_FUNCTION MtuRegistryChange;
-_Use_decl_annotations_
-static NTSTATUS
-MtuRegistryChange(_In_ PVOID CallbackContext, _In_opt_ PVOID Argument1, _In_opt_ PVOID Argument2)
+static VOID
+IpInterfaceChangeNotification(
+    _In_ PVOID CallerContext,
+    _In_opt_ PMIB_IPINTERFACE_ROW Row,
+    _In_ MIB_NOTIFICATION_TYPE NotificationType)
 {
-    WG_DEVICE *Wg = CallbackContext;
-    REG_NOTIFY_CLASS NotificationClass = (REG_NOTIFY_CLASS)(ULONG_PTR)Argument1;
-    REG_POST_OPERATION_INFORMATION *Post = (REG_POST_OPERATION_INFORMATION *)Argument2;
-    REG_SET_VALUE_KEY_INFORMATION *Pre;
-    UNICODE_STRING MtuKeyName = RTL_CONSTANT_STRING(L"MTU");
-    ULONG_PTR Obj1, Obj2;
-
-    if (NotificationClass != RegNtPostSetValueKey || !Post || Post->Status != STATUS_SUCCESS)
-        goto out;
-    Pre = Post->PreInformation;
-    if (!Pre || Pre->Object != Post->Object || Pre->DataSize != sizeof(ULONG) || Pre->Type != REG_DWORD ||
-        !RtlEqualUnicodeString(Pre->ValueName, &MtuKeyName, TRUE))
-        goto out;
-    if (!NT_SUCCESS(CmCallbackGetKeyObjectID(&Wg->MtuRegistryNotifier, Post->Object, &Obj1, NULL)) ||
-        !NT_SUCCESS(CmCallbackGetKeyObjectID(&Wg->MtuRegistryNotifier, Wg->MtuRegistryKeyObject, &Obj2, NULL)) ||
-        Obj1 != Obj2)
-        goto out;
-    Wg->Mtu = min(MTU_MAX, *(DWORD *)Pre->Data);
-out:
-    return STATUS_SUCCESS;
-}
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-_Must_inspect_result_
-static NTSTATUS
-SetupMtuRegistryWatcher(_Inout_ WG_DEVICE *Wg, _In_ CONST NET_LUID *Luid)
-{
-    Wg->Mtu = 1500 - DATA_PACKET_MINIMUM_LENGTH;
-
-    UNICODE_STRING Prefix = RTL_CONSTANT_STRING(
-        L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\");
-    UNICODE_STRING RegKey;
-    WCHAR RegKeyBuf[128];
-    RtlInitEmptyUnicodeString(&RegKey, RegKeyBuf, sizeof(RegKeyBuf));
-    NTSTATUS Status = RtlUnicodeStringCat(&RegKey, &Prefix);
-    if (!NT_SUCCESS(Status))
-        return Status;
-
-    GUID InterfaceGuid;
-    Status = ConvertInterfaceLuidToGuid(Luid, &InterfaceGuid);
-    if (!NT_SUCCESS(Status))
-        return Status;
-    UNICODE_STRING InterfaceGuidString;
-    Status = RtlStringFromGUID(&InterfaceGuid, &InterfaceGuidString);
-    if (!NT_SUCCESS(Status))
-        return Status;
-    Status = RtlUnicodeStringCat(&RegKey, &InterfaceGuidString);
-    RtlFreeUnicodeString(&InterfaceGuidString);
-    if (!NT_SUCCESS(Status))
-        return Status;
-
-    OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
-    InitializeObjectAttributes(&ObjectAttributes, &RegKey, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-    HANDLE KeyHandle;
-    Status = ZwCreateKey(
-        &KeyHandle, KEY_QUERY_VALUE | KEY_SET_VALUE, &ObjectAttributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
-    if (!NT_SUCCESS(Status))
-        return Status;
-
-    UNICODE_STRING MtuName = RTL_CONSTANT_STRING(L"MTU");
-    struct
+    if ((NotificationType != MibAddInstance && NotificationType != MibParameterNotification) || !Row ||
+        (NotificationType == MibParameterNotification && (!Row->NlMtu || Row->NlMtu == ~0U)))
+        return;
+    MuAcquirePushLockShared(&DeviceListLock);
+    WG_DEVICE *IterWg, *Wg = NULL;
+    LIST_FOR_EACH_ENTRY (IterWg, &DeviceList, WG_DEVICE, DeviceList)
     {
-        KEY_VALUE_FULL_INFORMATION Info;
-        UCHAR Buf[63];
-    } InfoBuf;
-    ULONG Len;
-    Status = ZwQueryValueKey(KeyHandle, &MtuName, KeyValueFullInformation, &InfoBuf.Info, sizeof(InfoBuf), &Len);
-    if (NT_SUCCESS(Status) && InfoBuf.Info.DataLength == sizeof(ULONG) && InfoBuf.Info.Type == REG_DWORD)
-        Wg->Mtu = min(MTU_MAX, *(ULONG *)((ULONG_PTR)&InfoBuf.Info + InfoBuf.Info.DataOffset));
+        if (IterWg->InterfaceLuid.Value == Row->InterfaceLuid.Value)
+        {
+            Wg = IterWg;
+            break;
+        }
+    }
+    if (!Wg)
+        goto cleanupDeviceListLock;
+    ULONG *Mtu;
+    if (Row->Family == AF_INET)
+        Mtu = &Wg->Mtu4;
+    else if (Row->Family == AF_INET6)
+        Mtu = &Wg->Mtu6;
     else
-        Status = ZwSetValueKey(KeyHandle, &MtuName, 0, REG_DWORD, &Wg->Mtu, sizeof(Wg->Mtu));
-    if (!NT_SUCCESS(Status))
-        goto cleanupHandle;
-
-    Status = ObReferenceObjectByHandle(KeyHandle, 0, NULL, KernelMode, &Wg->MtuRegistryKeyObject, NULL);
-    if (!NT_SUCCESS(Status))
-        goto cleanupHandle;
-    ZwClose(KeyHandle);
-
-    Status = CmRegisterCallback(MtuRegistryChange, Wg, &Wg->MtuRegistryNotifier);
-    if (!NT_SUCCESS(Status))
-        goto cleanupObject;
-
-    return STATUS_SUCCESS;
-
-cleanupObject:
-    ObDereferenceObject(Wg->MtuRegistryKeyObject);
-    return Status;
-cleanupHandle:
-    ZwClose(KeyHandle);
-    return Status;
+        goto cleanupDeviceListLock;
+    if (NotificationType == MibAddInstance && !*Mtu)
+    {
+        if ((!Row->NlMtu || Row->NlMtu == ~0U) && !NT_SUCCESS(GetIpInterfaceEntry(Row)))
+            goto cleanupDeviceListLock;
+        *Mtu = Row->NlMtu;
+        Row->SitePrefixLength = 0;
+        Row->NlMtu = 1500 - DATA_PACKET_MINIMUM_LENGTH;
+        if (*Mtu == MTU_MAX || !*Mtu || *Mtu == ~0U)
+        {
+            *Mtu = Row->NlMtu = 1500 - DATA_PACKET_MINIMUM_LENGTH;
+            SetIpInterfaceEntry(Row);
+        }
+    }
+    else if (NotificationType == MibParameterNotification)
+        *Mtu = Row->NlMtu;
+cleanupDeviceListLock:
+    MuReleasePushLockShared(&DeviceListLock);
 }
 
 static MINIPORT_HALT HaltEx;
@@ -371,8 +321,6 @@ HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
         ObDereferenceObject(Wg->SocketOwnerProcess);
         Wg->SocketOwnerProcess = NULL;
     }
-    CmUnRegisterCallback(Wg->MtuRegistryNotifier);
-    ObDereferenceObject(Wg->MtuRegistryKeyObject);
     PeerRemoveAll(Wg);
     MulticoreWorkQueueDestroy(&Wg->DecryptThreads);
     MulticoreWorkQueueDestroy(&Wg->EncryptThreads);
@@ -618,13 +566,9 @@ InitializeEx(
     if (!NT_SUCCESS(Status))
         goto cleanupHandshakeTxThreads;
 
-    Status = SetupMtuRegistryWatcher(Wg, &MiniportInitParameters->NetLuid);
-    if (!NT_SUCCESS(Status))
-        goto cleanupHandshakeRxThreads;
-
     Status = RegisterAdapter(MiniportAdapterHandle, Wg);
     if (!NT_SUCCESS(Status))
-        goto cleanupMtuRegistryNotifier;
+        goto cleanupHandshakeRxThreads;
 
     KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
     MuAcquirePushLockExclusive(&DeviceListLock);
@@ -635,9 +579,6 @@ InitializeEx(
 
     return NDIS_STATUS_SUCCESS;
 
-cleanupMtuRegistryNotifier:
-    CmUnRegisterCallback(Wg->MtuRegistryNotifier);
-    ObDereferenceObject(Wg->MtuRegistryKeyObject);
 cleanupHandshakeRxThreads:
     MulticoreWorkQueueDestroy(&Wg->HandshakeRxThreads);
 cleanupHandshakeTxThreads:
@@ -930,6 +871,10 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     MuInitializePushLock(&DeviceListLock);
     InitializeListHead(&DeviceList);
 
+    Status = NotifyIpInterfaceChange(AF_UNSPEC, IpInterfaceChangeNotification, NULL, FALSE, &IpInterfaceNotifier);
+    if (!NT_SUCCESS(Status))
+        return Status;
+
     NdisVersion = NdisGetVersion();
     if (NdisVersion < NDIS_MINIPORT_VERSION_MIN)
         return NDIS_STATUS_UNSUPPORTED_REVISION;
@@ -969,13 +914,18 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     };
     Status = NdisMRegisterMiniportDriver(DriverObject, RegistryPath, NULL, &Miniport, &NdisMiniportDriverHandle);
     if (!NT_SUCCESS(Status))
-        return Status;
+        goto cleanupIpInterfaceNotifier;
     IoctlDriverEntry(DriverObject);
     return STATUS_SUCCESS;
+
+cleanupIpInterfaceNotifier:
+    CancelMibChangeNotify2(IpInterfaceNotifier);
+    return Status;
 }
 
 VOID DeviceUnload(VOID)
 {
     NdisMDeregisterMiniportDriver(NdisMiniportDriverHandle);
+    CancelMibChangeNotify2(IpInterfaceNotifier);
     RcuBarrier();
 }

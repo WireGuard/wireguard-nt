@@ -417,11 +417,12 @@ int __cdecl main(void)
     }
     IpInterface.UseAutomaticMetric = FALSE;
     IpInterface.Metric = 0;
+    IpInterface.NlMtu = 1420;
     IpInterface.SitePrefixLength = 0;
     LastError = SetIpInterfaceEntry(&IpInterface);
     if (LastError != ERROR_SUCCESS)
     {
-        LogError(L"Failed to set metric", LastError);
+        LogError(L"Failed to set metric and MTU", LastError);
         goto cleanupAdapter;
     }
 

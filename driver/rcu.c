@@ -152,7 +152,7 @@ RcuDriverEntry(VOID)
     InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
     HANDLE Handle;
     NTSTATUS Status =
-        PsCreateSystemThread(&Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, CallerThread, (PVOID)TRUE);
+        PsCreateSystemThread(&Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, CallerThread, NULL);
     if (!NT_SUCCESS(Status))
         goto cleanupDpcs;
     ObReferenceObjectByHandle(Handle, SYNCHRONIZE, NULL, KernelMode, &Cleanup.Thread, NULL);
