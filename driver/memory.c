@@ -109,6 +109,20 @@ _Use_decl_annotations_
 NET_BUFFER_LIST *
 MemAllocateNetBufferListWithClonedGeometry(NET_BUFFER_LIST *Original, ULONG AdditionalBytesPerNb)
 {
+    if (NET_BUFFER_LIST_FIRST_NB(Original) && !NET_BUFFER_NEXT_NB(NET_BUFFER_LIST_FIRST_NB(Original)))
+    {
+        ULONG Length = NET_BUFFER_DATA_LENGTH(NET_BUFFER_LIST_FIRST_NB(Original));
+        if (Length > MTU_MAX ||
+            !NT_SUCCESS(RtlULongAdd(Length, AdditionalBytesPerNb, &Length)))
+            return NULL;
+        NET_BUFFER_LIST *Clone = MemAllocateNetBufferList(0, Length, 0);
+        if (!Clone)
+            return NULL;
+        NET_BUFFER_LIST_INFO(Clone, NetBufferListProtocolId) = NET_BUFFER_LIST_INFO(Original, NetBufferListProtocolId);
+        Clone->ParentNetBufferList = Original;
+        return Clone;
+    }
+
     NET_BUFFER_LIST *Clone = NdisAllocateNetBufferList(LooseNblPool, 0, 0);
     if (!Clone)
         return NULL;
