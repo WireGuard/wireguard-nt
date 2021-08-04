@@ -250,6 +250,13 @@ retry:
     Status = GetIpForwardTable2(Endpoint->Addr.si_family, &Table);
     if (!NT_SUCCESS(Status))
         return Status;
+    union
+    {
+        MIB_IF_ROW2 Interface;
+        MIB_IPINTERFACE_ROW IpInterface;
+    } *If = MemAllocate(sizeof(*If));
+    if (!If)
+        return STATUS_INSUFFICIENT_RESOURCES;
     for (ULONG i = 0; i < Table->NumEntries; ++i)
     {
         if (Table->Table[i].InterfaceLuid.Value == Peer->Device->InterfaceLuid.Value)
@@ -262,14 +269,14 @@ retry:
         if (Endpoint->Addr.si_family == AF_INET6 &&
             !CidrMaskMatchV6(&Endpoint->Addr.Ipv6.sin6_addr, &Table->Table[i].DestinationPrefix))
             continue;
-        MIB_IF_ROW2 Interface = { .InterfaceLuid = Table->Table[i].InterfaceLuid };
-        if (!NT_SUCCESS(GetIfEntry2(&Interface)) || Interface.OperStatus != IfOperStatusUp)
+        If->Interface = (MIB_IF_ROW2){ .InterfaceLuid = Table->Table[i].InterfaceLuid };
+        if (!NT_SUCCESS(GetIfEntry2(&If->Interface)) || If->Interface.OperStatus != IfOperStatusUp)
             continue;
-        MIB_IPINTERFACE_ROW IpInterface = { .Family = Endpoint->Addr.si_family,
-                                            .InterfaceLuid = Table->Table[i].InterfaceLuid };
-        if (!NT_SUCCESS(GetIpInterfaceEntry(&IpInterface)))
+        If->IpInterface =
+            (MIB_IPINTERFACE_ROW){ .Family = Endpoint->Addr.si_family, .InterfaceLuid = Table->Table[i].InterfaceLuid };
+        if (!NT_SUCCESS(GetIpInterfaceEntry(&If->IpInterface)))
             continue;
-        ULONG Metric = Table->Table[i].Metric + IpInterface.Metric;
+        ULONG Metric = Table->Table[i].Metric + If->IpInterface.Metric;
         if (Table->Table[i].DestinationPrefix.PrefixLength == BestCidr && Metric > BestMetric)
             continue;
         BestCidr = Table->Table[i].DestinationPrefix.PrefixLength;
@@ -277,6 +284,7 @@ retry:
         BestIndex = Table->Table[i].InterfaceIndex;
         BestLuid = Table->Table[i].InterfaceLuid;
     }
+    MemFree(If);
     /* We disable wg-loop routing for now, to prevent stack overflow. TODO: revisit later. */
     Status = STATUS_SUCCESS;
     MuAcquirePushLockShared(&DeviceListLock);
