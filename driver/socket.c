@@ -177,7 +177,7 @@ SendAsync(_In_ WG_DEVICE *Wg, _In_ __drv_aliasesMem SOCKET_SEND_CTX *Ctx)
             NET_BUFFER_WSK_BUF(NET_BUFFER_LIST_FIRST_NB(Ctx->FirstNbl)),
             0,
             (PSOCKADDR)&Ctx->Endpoint.Addr,
-            (ULONG)Ctx->Endpoint.SrcCmsghdr.cmsg_len,
+            (ULONG)WSA_CMSGDATA_ALIGN(Ctx->Endpoint.SrcCmsghdr.cmsg_len),
             &Ctx->Endpoint.SrcCmsghdr,
             &Ctx->Irp);
     else
@@ -187,7 +187,7 @@ SendAsync(_In_ WG_DEVICE *Wg, _In_ __drv_aliasesMem SOCKET_SEND_CTX *Ctx)
                 &Ctx->Buffer,
                 0,
                 (PSOCKADDR)&Ctx->Endpoint.Addr,
-                (ULONG)Ctx->Endpoint.SrcCmsghdr.cmsg_len,
+                (ULONG)WSA_CMSGDATA_ALIGN(Ctx->Endpoint.SrcCmsghdr.cmsg_len),
                 &Ctx->Endpoint.SrcCmsghdr,
                 &Ctx->Irp);
     Status = STATUS_SUCCESS;
