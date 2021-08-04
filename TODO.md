@@ -38,8 +38,9 @@ Reference: https://docs.microsoft.com/sl-si/windows-hardware/drivers/devtest/sta
 
 ### WHQL
 
-### Fix MTU notification
-- Due to a Windows bug, NotifyIpInterfaceChange does not tell us about MTU changes.
+### Remove MTU polling
+- When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
+  check for the workaround thread polling.
 
 #### DVL and Static Tools Logo Test
 - Recent (E)WDK DVL always includes CodeQL test results. Even if "NORUN". WHQL 1809 does not support CodeQL test results in DVL and fails Static Tools Logo Test. Those two are in conflict. Either downgrade (E)WDK, or upgrade WHQL rig.

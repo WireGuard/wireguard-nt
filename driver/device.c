@@ -30,6 +30,8 @@
 static UINT NdisVersion;
 static NDIS_HANDLE NdisMiniportDriverHandle;
 static HANDLE IpInterfaceNotifier;
+static PKTHREAD IpInterfaceNotifierBugWorkaroundThread;
+static KEVENT IpInterfaceNotifierBugWorkaroundTerminate;
 LIST_ENTRY DeviceList;
 EX_PUSH_LOCK DeviceListLock;
 
@@ -301,6 +303,72 @@ IpInterfaceChangeNotification(
         *Mtu = Row->NlMtu;
 cleanupDeviceListLock:
     MuReleasePushLockShared(&DeviceListLock);
+}
+
+static KSTART_ROUTINE IpInterfaceNotifierBugWorkaroundRoutine;
+_Use_decl_annotations_
+static VOID
+IpInterfaceNotifierBugWorkaroundRoutine(PVOID StartContext)
+{
+    while (KeWaitForSingleObject(
+               &IpInterfaceNotifierBugWorkaroundTerminate,
+               Executive,
+               KernelMode,
+               FALSE,
+               &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(3) }) == STATUS_TIMEOUT)
+    {
+        MuAcquirePushLockShared(&DeviceListLock);
+        WG_DEVICE *Wg;
+        LIST_FOR_EACH_ENTRY (Wg, &DeviceList, WG_DEVICE, DeviceList)
+        {
+            if (Wg->Mtu4)
+            {
+                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET };
+                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
+                    Wg->Mtu4 = Row.NlMtu;
+            }
+            if (Wg->Mtu6)
+            {
+                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET6 };
+                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
+                    Wg->Mtu6 = Row.NlMtu;
+            }
+        }
+        MuReleasePushLockShared(&DeviceListLock);
+    }
+}
+
+_IRQL_requires_max_(PASSIVE_LEVEL)
+static NTSTATUS InitIpInterfaceNotifierBugWorkaround(VOID)
+{
+    RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
+    if (NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
+        (OsVersionInfo.dwMajorVersion > 10 ||
+         /* TODO: Update the 999999 here once we know which builds this is fixed on. */
+         (OsVersionInfo.dwMajorVersion == 10 && OsVersionInfo.dwBuildNumber >= 999999)))
+        return STATUS_SUCCESS;
+
+    KeInitializeEvent(&IpInterfaceNotifierBugWorkaroundTerminate, NotificationEvent, FALSE);
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+    HANDLE Handle;
+    NTSTATUS Status = PsCreateSystemThread(
+        &Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, IpInterfaceNotifierBugWorkaroundRoutine, NULL);
+    if (!NT_SUCCESS(Status))
+        return Status;
+    ObReferenceObjectByHandle(Handle, SYNCHRONIZE, NULL, KernelMode, &IpInterfaceNotifierBugWorkaroundThread, NULL);
+    ZwClose(Handle);
+    return STATUS_SUCCESS;
+}
+
+_IRQL_requires_max_(PASSIVE_LEVEL)
+static VOID UninitIpInterfaceNotifierBugWorkaround(VOID)
+{
+    if (!IpInterfaceNotifierBugWorkaroundThread)
+        return;
+    KeSetEvent(&IpInterfaceNotifierBugWorkaroundTerminate, IO_NO_INCREMENT, FALSE);
+    KeWaitForSingleObject(IpInterfaceNotifierBugWorkaroundThread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(IpInterfaceNotifierBugWorkaroundThread);
 }
 
 static MINIPORT_HALT HaltEx;
@@ -874,6 +942,9 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     Status = NotifyIpInterfaceChange(AF_UNSPEC, IpInterfaceChangeNotification, NULL, FALSE, &IpInterfaceNotifier);
     if (!NT_SUCCESS(Status))
         return Status;
+    Status = InitIpInterfaceNotifierBugWorkaround();
+    if (!NT_SUCCESS(Status))
+        goto cleanupIpInterfaceNotifier;
 
     NdisVersion = NdisGetVersion();
     if (NdisVersion < NDIS_MINIPORT_VERSION_MIN)
@@ -914,10 +985,12 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     };
     Status = NdisMRegisterMiniportDriver(DriverObject, RegistryPath, NULL, &Miniport, &NdisMiniportDriverHandle);
     if (!NT_SUCCESS(Status))
-        goto cleanupIpInterfaceNotifier;
+        goto cleanupIpInterfaceNotifierBugWorkaround;
     IoctlDriverEntry(DriverObject);
     return STATUS_SUCCESS;
 
+cleanupIpInterfaceNotifierBugWorkaround:
+    UninitIpInterfaceNotifierBugWorkaround();
 cleanupIpInterfaceNotifier:
     CancelMibChangeNotify2(IpInterfaceNotifier);
     return Status;
@@ -926,6 +999,7 @@ cleanupIpInterfaceNotifier:
 VOID DeviceUnload(VOID)
 {
     NdisMDeregisterMiniportDriver(NdisMiniportDriverHandle);
+    UninitIpInterfaceNotifierBugWorkaround();
     CancelMibChangeNotify2(IpInterfaceNotifier);
     RcuBarrier();
 }
