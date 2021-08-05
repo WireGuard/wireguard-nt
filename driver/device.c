@@ -17,8 +17,7 @@
 #include <ntstrsafe.h>
 #include <netioapi.h>
 
-#pragma warning(disable : 28175)      /* Undocumented: the member of struct should not be accessed by a driver */
-#pragma warning(disable : 4152 28023) /* Casting between data types and function pointer types. */
+#pragma warning(disable : 28175) /* undocumented: the member of struct should not be accessed by a driver */
 
 #define NDIS_MINIPORT_VERSION_MIN ((NDIS_MINIPORT_MINIMUM_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINIMUM_MINOR_VERSION)
 #define NDIS_MINIPORT_VERSION_MAX ((NDIS_MINIPORT_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINOR_VERSION)
@@ -31,8 +30,8 @@
 static UINT NdisVersion;
 static NDIS_HANDLE NdisMiniportDriverHandle;
 static HANDLE IpInterfaceNotifier;
-static volatile PDRIVER_DISPATCH NsiDispatchDeviceControl, *NsiDispatchDeviceControlEntry;
-static EX_RUNDOWN_REF HijackedNsiDispatchDeviceControlInUse;
+static PKTHREAD IpInterfaceNotifierBugWorkaroundThread;
+static KEVENT IpInterfaceNotifierBugWorkaroundTerminate;
 LIST_ENTRY DeviceList;
 EX_PUSH_LOCK DeviceListLock;
 
@@ -306,89 +305,41 @@ cleanupDeviceListLock:
     MuReleasePushLockShared(&DeviceListLock);
 }
 
-_Dispatch_type_(IRP_MJ_DEVICE_CONTROL)
-static DRIVER_DISPATCH HijackedNsiDispatchDeviceControl;
+static KSTART_ROUTINE IpInterfaceNotifierBugWorkaroundRoutine;
 _Use_decl_annotations_
-static NTSTATUS
-HijackedNsiDispatchDeviceControl(DEVICE_OBJECT *DeviceObject, IRP *Irp)
+static VOID
+IpInterfaceNotifierBugWorkaroundRoutine(PVOID StartContext)
 {
-    NTSTATUS Ret;
-    /* TODO: This still races, technically. */
-    if (!ExAcquireRundownProtection(&HijackedNsiDispatchDeviceControlInUse))
-        return NsiDispatchDeviceControl(DeviceObject, Irp);
-    MIB_IPINTERFACE_ROW Row = { 0 };
-    NPI_MODULEID ModuleId = { 0 };
-    IO_STACK_LOCATION *Stack = IoGetCurrentIrpStackLocation(Irp);
-    ULONG Len = Stack->Parameters.DeviceIoControl.InputBufferLength;
-    if (Stack->Parameters.DeviceIoControl.IoControlCode != IOCTL_NSI_SET_ALL_PARAMETERS)
-        goto out;
-#if _WIN64
-    NSI_SET_ALL_PARAMETERS SetAllParametersBuffer;
-    NSI_SET_ALL_PARAMETERS_32 SetAllParametersBuffer32;
-    if ((IoIs32bitProcess(Irp) && Len != sizeof(SetAllParametersBuffer32)) ||
-        (!IoIs32bitProcess(Irp) && Len != sizeof(SetAllParametersBuffer)))
-        goto out;
-#else
-    NSI_SET_ALL_PARAMETERS SetAllParametersBuffer;
-    if (Len != sizeof(SetAllParametersBuffer))
-        goto out;
-#endif
-    try
+    while (KeWaitForSingleObject(
+               &IpInterfaceNotifierBugWorkaroundTerminate,
+               Executive,
+               KernelMode,
+               FALSE,
+               &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(3) }) == STATUS_TIMEOUT)
     {
-        UCHAR *UserBuffer = Stack->Parameters.DeviceIoControl.Type3InputBuffer;
-#if _WIN64
-        if (IoIs32bitProcess(Irp))
+        MuAcquirePushLockShared(&DeviceListLock);
+        WG_DEVICE *Wg;
+        LIST_FOR_EACH_ENTRY (Wg, &DeviceList, WG_DEVICE, DeviceList)
         {
-            ProbeForRead(UserBuffer, sizeof(SetAllParametersBuffer32), 1);
-            RtlCopyMemory(&SetAllParametersBuffer32, UserBuffer, sizeof(SetAllParametersBuffer32));
-            RtlZeroMemory(&SetAllParametersBuffer, sizeof(SetAllParametersBuffer));
-            SetAllParametersBuffer.MibIpInterfaceRowAfterFamily =
-                (VOID *)SetAllParametersBuffer32.MibIpInterfaceRowAfterFamily;
-            SetAllParametersBuffer.ModuleIdFromFamily = (VOID *)SetAllParametersBuffer32.ModuleIdFromFamily;
-            SetAllParametersBuffer.ParamType = SetAllParametersBuffer32.ParamType;
+            if (Wg->Mtu4)
+            {
+                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET };
+                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
+                    Wg->Mtu4 = Row.NlMtu;
+            }
+            if (Wg->Mtu6)
+            {
+                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET6 };
+                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
+                    Wg->Mtu6 = Row.NlMtu;
+            }
         }
-        else
-#endif
-        {
-            ProbeForRead(UserBuffer, sizeof(SetAllParametersBuffer), 1);
-            RtlCopyMemory(&SetAllParametersBuffer, UserBuffer, sizeof(SetAllParametersBuffer));
-        }
-        ProbeForRead(SetAllParametersBuffer.ModuleIdFromFamily, sizeof(ModuleId), 1);
-        RtlCopyMemory(&ModuleId, SetAllParametersBuffer.ModuleIdFromFamily, sizeof(ModuleId));
-        ProbeForRead(
-            SetAllParametersBuffer.MibIpInterfaceRowAfterFamily,
-            sizeof(Row) - FIELD_OFFSET(MIB_IPINTERFACE_ROW, InterfaceLuid),
-            1);
-        RtlCopyMemory(
-            &Row.InterfaceLuid,
-            SetAllParametersBuffer.MibIpInterfaceRowAfterFamily,
-            sizeof(Row) - FIELD_OFFSET(MIB_IPINTERFACE_ROW, InterfaceLuid));
+        MuReleasePushLockShared(&DeviceListLock);
     }
-#pragma warning(suppress : 6320) /* This is sketchy, so we certainly want to handle all exceptions. */
-    except(EXCEPTION_EXECUTE_HANDLER) { goto out; }
-    if (!Row.NlMtu || Row.NlMtu == ~0 || SetAllParametersBuffer.ParamType != 7)
-        goto out;
-    if (RtlEqualMemory(&NPI_MS_IPV4_MODULEID, &ModuleId, sizeof(ModuleId)))
-        Row.Family = AF_INET;
-    else if (RtlEqualMemory(&NPI_MS_IPV6_MODULEID, &ModuleId, sizeof(ModuleId)))
-        Row.Family = AF_INET6;
-    else
-        goto out;
-
-    Ret = NsiDispatchDeviceControl(DeviceObject, Irp);
-    if (NT_SUCCESS(Ret))
-        IpInterfaceChangeNotification(NsiDispatchDeviceControlEntry, &Row, MibParameterNotification);
-    ExReleaseRundownProtection(&HijackedNsiDispatchDeviceControlInUse);
-    return Ret;
-
-out:
-    Ret = NsiDispatchDeviceControl(DeviceObject, Irp);
-    ExReleaseRundownProtection(&HijackedNsiDispatchDeviceControlInUse);
-    return Ret;
 }
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
-static NTSTATUS HijackNsiDispatchDeviceControl(VOID)
+static NTSTATUS InitIpInterfaceNotifierBugWorkaround(VOID)
 {
     RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
     if (NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
@@ -397,38 +348,27 @@ static NTSTATUS HijackNsiDispatchDeviceControl(VOID)
          (OsVersionInfo.dwMajorVersion == 10 && OsVersionInfo.dwBuildNumber >= 999999)))
         return STATUS_SUCCESS;
 
-    UNICODE_STRING NsiDevice = RTL_CONSTANT_STRING(L"\\Device\\Nsi");
-    PFILE_OBJECT FileObject;
-    PDEVICE_OBJECT DeviceObject;
-    NTSTATUS Status = IoGetDeviceObjectPointer(&NsiDevice, FILE_READ_ATTRIBUTES, &FileObject, &DeviceObject);
+    KeInitializeEvent(&IpInterfaceNotifierBugWorkaroundTerminate, NotificationEvent, FALSE);
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+    HANDLE Handle;
+    NTSTATUS Status = PsCreateSystemThread(
+        &Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, IpInterfaceNotifierBugWorkaroundRoutine, NULL);
     if (!NT_SUCCESS(Status))
         return Status;
-    ExInitializeRundownProtection(&HijackedNsiDispatchDeviceControlInUse);
-    NsiDispatchDeviceControlEntry = &DeviceObject->DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL];
-    NsiDispatchDeviceControl = ReadPointerNoFence((PVOID *)NsiDispatchDeviceControlEntry);
-    NsiDispatchDeviceControl =
-        InterlockedExchangePointer((PVOID *)NsiDispatchDeviceControlEntry, &HijackedNsiDispatchDeviceControl);
-    ObDereferenceObject(FileObject);
+    ObReferenceObjectByHandle(Handle, SYNCHRONIZE, NULL, KernelMode, &IpInterfaceNotifierBugWorkaroundThread, NULL);
+    ZwClose(Handle);
     return STATUS_SUCCESS;
 }
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
-static VOID UnhijackNsiDispatchDeviceControl(VOID)
+static VOID UninitIpInterfaceNotifierBugWorkaround(VOID)
 {
-    if (!NsiDispatchDeviceControlEntry)
+    if (!IpInterfaceNotifierBugWorkaroundThread)
         return;
-    /* We hope that anything else hijacking this pointer is following the same cmpxchg protocol, so that
-     * we always load and unload hijacking modules in the correct order.
-     */
-    while (InterlockedCompareExchangePointer(
-               (PVOID *)NsiDispatchDeviceControlEntry, NsiDispatchDeviceControl, &HijackedNsiDispatchDeviceControl) !=
-           &HijackedNsiDispatchDeviceControl)
-        KeDelayExecutionThread(KernelMode, FALSE, &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(1) });
-    ExWaitForRundownProtectionRelease(&HijackedNsiDispatchDeviceControlInUse);
-    /* Sleep for a moment after releasing the rundown protection to give any in-flight callers time to finish up.
-     * TODO: this is extremely ugly and kind of indicates how broken this whole thing is here.
-     */
-    KeDelayExecutionThread(KernelMode, FALSE, &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(1) / 3 });
+    KeSetEvent(&IpInterfaceNotifierBugWorkaroundTerminate, IO_NO_INCREMENT, FALSE);
+    KeWaitForSingleObject(IpInterfaceNotifierBugWorkaroundThread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(IpInterfaceNotifierBugWorkaroundThread);
 }
 
 static MINIPORT_HALT HaltEx;
@@ -1002,7 +942,7 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     Status = NotifyIpInterfaceChange(AF_UNSPEC, IpInterfaceChangeNotification, NULL, FALSE, &IpInterfaceNotifier);
     if (!NT_SUCCESS(Status))
         return Status;
-    Status = HijackNsiDispatchDeviceControl();
+    Status = InitIpInterfaceNotifierBugWorkaround();
     if (!NT_SUCCESS(Status))
         goto cleanupIpInterfaceNotifier;
 
@@ -1050,7 +990,7 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     return STATUS_SUCCESS;
 
 cleanupIpInterfaceNotifierBugWorkaround:
-    UnhijackNsiDispatchDeviceControl();
+    UninitIpInterfaceNotifierBugWorkaround();
 cleanupIpInterfaceNotifier:
     CancelMibChangeNotify2(IpInterfaceNotifier);
     return Status;
@@ -1059,7 +999,7 @@ cleanupIpInterfaceNotifier:
 VOID DeviceUnload(VOID)
 {
     NdisMDeregisterMiniportDriver(NdisMiniportDriverHandle);
-    UnhijackNsiDispatchDeviceControl();
+    UninitIpInterfaceNotifierBugWorkaround();
     CancelMibChangeNotify2(IpInterfaceNotifier);
     RcuBarrier();
 }

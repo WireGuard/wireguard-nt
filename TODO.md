@@ -38,14 +38,9 @@ Reference: https://docs.microsoft.com/sl-si/windows-hardware/drivers/devtest/sta
 
 ### WHQL
 
-### Remove NSI hijacking
+### Remove MTU polling
 - When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
-  check for the \Device\Nsi hijack.
-- Currently NSI hijacking with this method works for powershell and iphlpapi but
-  does not work for netsh.
-- Naive anti-cheat drivers might notice that the pointer is no longer in nsiproxy.sys's .text.
-- Stacking this could cause issues for driver load/unload order, if other
-  drivers don't do a cmpxchg sleep loop like we do.
+  check for the workaround thread polling.
 
 #### DVL and Static Tools Logo Test
 - Recent (E)WDK DVL always includes CodeQL test results. Even if "NORUN". WHQL 1809 does not support CodeQL test results in DVL and fails Static Tools Logo Test. Those two are in conflict. Either downgrade (E)WDK, or upgrade WHQL rig.
