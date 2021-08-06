@@ -262,7 +262,7 @@ out:
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static BOOLEAN
-PacketConsumeDataDone(_Inout_ WG_PEER *Peer, _Inout_ NET_BUFFER_LIST *Nbl, _In_ CONST ENDPOINT *Endpoint)
+PacketConsumeDataDone(_Inout_ WG_PEER *Peer, _Inout_ NET_BUFFER_LIST *Nbl)
 {
     ULONG Len, LenBeforeTrim;
     WG_PEER *RoutedPeer;
@@ -271,7 +271,7 @@ PacketConsumeDataDone(_Inout_ WG_PEER *Peer, _Inout_ NET_BUFFER_LIST *Nbl, _In_ 
     VOID *Hdr;
     CHAR EndpointName[SOCKADDR_STR_MAX_LEN], SrcStr[46] = "";
 
-    SocketSetPeerEndpoint(Peer, Endpoint);
+    SocketSetPeerEndpointFromNbl(Peer, Nbl);
 
     if (NoiseReceivedWithKeypair(&Peer->Keypairs, NET_BUFFER_LIST_KEYPAIR(Nbl)))
     {
@@ -376,7 +376,6 @@ static BOOLEAN
 PacketPeerRxWork(_Inout_ WG_PEER *Peer, _In_ ULONG Budget)
 {
     NOISE_KEYPAIR *Keypair;
-    ENDPOINT Endpoint;
     PACKET_STATE State;
     NET_BUFFER_LIST *Nbl, *First = NULL, **Next = &First;
     BOOLEAN Free, MoreProcessing = FALSE;
@@ -405,10 +404,7 @@ PacketPeerRxWork(_Inout_ WG_PEER *Peer, _In_ ULONG Budget)
             goto next;
         }
 
-        if (!NT_SUCCESS(SocketEndpointFromNbl(&Endpoint, Nbl)))
-            goto next;
-
-        if (PacketConsumeDataDone(Peer, Nbl, &Endpoint))
+        if (PacketConsumeDataDone(Peer, Nbl))
         {
             *Next = Nbl;
             Next = &NET_BUFFER_LIST_NEXT_NBL(Nbl);
