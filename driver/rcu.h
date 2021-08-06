@@ -63,6 +63,21 @@ RcuReadUnlock(_In_ _Notliteral_ _IRQL_restores_ KIRQL Irql)
     KeLowerIrql(Irql);
 }
 
+_IRQL_requires_min_(DISPATCH_LEVEL)
+_Acquires_rcu_
+static inline VOID RcuReadLockAtDpcLevel(VOID)
+{
+    _Analysis_assume_rcu_acquired_;
+}
+
+_IRQL_requires_min_(DISPATCH_LEVEL)
+_Releases_rcu_
+static inline VOID
+RcuReadUnlockFromDpcLevel(VOID)
+{
+    _Analysis_assume_rcu_released_;
+}
+
 // TODO: replace __rcu with proper SAL annotations perhaps?
 #define __rcu
 

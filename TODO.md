@@ -19,14 +19,10 @@
 
 ### Make SDV work with full settings
 
-### Figure out how to make wg-loop routing work safely
-
 ### Implement ICMP reply on error path
 - Not totally essential, but nice to have
 - One hard part is that we're post-NAT, and we can't dip down into the ct tuple
   like we do on linux, which could make the general concept impossible
-
-### Implement socket route cache
 
 ### Automate CodeQL
 Reference: https://docs.microsoft.com/sl-si/windows-hardware/drivers/devtest/static-tools-and-codeql

@@ -45,29 +45,39 @@ static_assert(
 
 typedef struct _SOCKET_SEND_CTX
 {
-    IRP Irp;
-    IO_STACK_LOCATION IoStackData;
-    ENDPOINT Endpoint;
+    union
+    {
+        IRP Irp;
+        UCHAR IrpBuffer[sizeof(IRP) + sizeof(IO_STACK_LOCATION)];
+    };
     WG_DEVICE *Wg;
     union
     {
         NET_BUFFER_LIST *FirstNbl;
         WSK_BUF Buffer;
     };
-    BOOLEAN IsNbl;
 } SOCKET_SEND_CTX;
 
-static IO_COMPLETION_ROUTINE SendComplete;
+static IO_COMPLETION_ROUTINE NblSendComplete;
 _Use_decl_annotations_
 static NTSTATUS
-SendComplete(DEVICE_OBJECT *DeviceObject, IRP *Irp, VOID *VoidCtx)
+NblSendComplete(DEVICE_OBJECT *DeviceObject, IRP *Irp, VOID *VoidCtx)
 {
     SOCKET_SEND_CTX *Ctx = VoidCtx;
     _Analysis_assume_(Ctx);
-    if (Ctx->IsNbl)
-        FreeSendNetBufferList(Ctx->Wg, Ctx->FirstNbl, 0);
-    else
-        MemFreeDataAndMdlChain(Ctx->Buffer.Mdl);
+    FreeSendNetBufferList(Ctx->Wg, Ctx->FirstNbl, 0);
+    ExFreeToLookasideListEx(&SocketSendCtxCache, Ctx);
+    return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+static IO_COMPLETION_ROUTINE BufferSendComplete;
+_Use_decl_annotations_
+static NTSTATUS
+BufferSendComplete(DEVICE_OBJECT *DeviceObject, IRP *Irp, VOID *VoidCtx)
+{
+    SOCKET_SEND_CTX *Ctx = VoidCtx;
+    _Analysis_assume_(Ctx);
+    MemFreeDataAndMdlChain(Ctx->Buffer.Mdl);
     ExFreeToLookasideListEx(&SocketSendCtxCache, Ctx);
     return STATUS_MORE_PROCESSING_REQUIRED;
 }
@@ -77,9 +87,12 @@ static BOOLEAN NoWskSendMessages;
 
 typedef struct _POLYFILLED_SOCKET_SEND_CTX
 {
-    IRP Irp;
-    IO_STACK_LOCATION IoStackData;
-    PIRP OriginalIrp;
+    union
+    {
+        IRP Irp;
+        UCHAR IrpBuffer[sizeof(IRP) + sizeof(IO_STACK_LOCATION)];
+    };
+    IRP *OriginalIrp;
     LONG *RefCount;
 } POLYFILLED_SOCKET_SEND_CTX;
 
@@ -123,7 +136,7 @@ PolyfilledWskSendMessages(
             continue;
         Ctx->RefCount = RefCount;
         Ctx->OriginalIrp = Irp;
-        IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IoStackData) + sizeof(Ctx->Irp), 1);
+        IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
         IoSetCompletionRoutine(&Ctx->Irp, PolyfilledSendComplete, Ctx, TRUE, TRUE, TRUE);
         InterlockedIncrement(RefCount);
         ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Dispatch)
@@ -139,62 +152,6 @@ PolyfilledWskSendMessages(
     return STATUS_SUCCESS;
 }
 #endif
-
-/* This function expects to have Ctx's Endpoint and *either* Buffer or FirstNbl
- * fields filled; it takes care of the rest. It will free/consume Ctx when
- * STATUS_SUCCESS is returned. Note that STATUS_SUCCESS means the actual
- * sending might fail asynchronously later on.
- */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-static NTSTATUS
-SendAsync(_In_ WG_DEVICE *Wg, _In_ __drv_aliasesMem SOCKET_SEND_CTX *Ctx)
-{
-    SOCKET *Socket = NULL;
-    NTSTATUS Status;
-
-    Ctx->Wg = Wg;
-    IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IoStackData) + sizeof(Ctx->Irp), 1);
-    IoSetCompletionRoutine(&Ctx->Irp, SendComplete, Ctx, TRUE, TRUE, TRUE);
-
-    KIRQL Irql = RcuReadLock();
-    if (Ctx->Endpoint.Addr.si_family == AF_INET)
-        Socket = RcuDereference(SOCKET, Wg->Sock4);
-    else if (Ctx->Endpoint.Addr.si_family == AF_INET6)
-        Socket = RcuDereference(SOCKET, Wg->Sock6);
-    if (!Socket)
-    {
-        Status = STATUS_NETWORK_UNREACHABLE;
-        goto cleanup;
-    }
-    PFN_WSK_SEND_MESSAGES WskSendMessages = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskSendMessages;
-#if NTDDI_VERSION == NTDDI_WIN7
-    if (NoWskSendMessages)
-        WskSendMessages = PolyfilledWskSendMessages;
-#endif
-    if (Ctx->IsNbl)
-        WskSendMessages(
-            Socket->Sock,
-            NET_BUFFER_WSK_BUF(NET_BUFFER_LIST_FIRST_NB(Ctx->FirstNbl)),
-            0,
-            (PSOCKADDR)&Ctx->Endpoint.Addr,
-            (ULONG)WSA_CMSGDATA_ALIGN(Ctx->Endpoint.SrcCmsghdr.cmsg_len),
-            &Ctx->Endpoint.SrcCmsghdr,
-            &Ctx->Irp);
-    else
-        ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)
-            ->WskSendTo(
-                Socket->Sock,
-                &Ctx->Buffer,
-                0,
-                (PSOCKADDR)&Ctx->Endpoint.Addr,
-                (ULONG)WSA_CMSGDATA_ALIGN(Ctx->Endpoint.SrcCmsghdr.cmsg_len),
-                &Ctx->Endpoint.SrcCmsghdr,
-                &Ctx->Irp);
-    Status = STATUS_SUCCESS;
-cleanup:
-    RcuReadUnlock(Irql);
-    return Status;
-}
 
 static BOOLEAN
 CidrMaskMatchV4(_In_ CONST IN_ADDR *Addr, _In_ CONST IP_ADDRESS_PREFIX *Prefix)
@@ -220,34 +177,30 @@ CidrMaskMatchV6(_In_ CONST IN6_ADDR *Addr, _In_ CONST IP_ADDRESS_PREFIX *Prefix)
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
 _IRQL_raises_(DISPATCH_LEVEL)
+_Acquires_shared_lock_(Peer->EndpointLock)
 _Requires_lock_not_held_(Peer->EndpointLock)
-_Acquires_lock_(Peer->EndpointLock)
 static NTSTATUS
-SocketResolvePeerEndpointSrc(_Inout_ WG_PEER *Peer, _Out_ _At_(*Irql, _IRQL_saves_) KIRQL *Irql)
+SocketResolvePeerEndpoint(_Inout_ WG_PEER *Peer, _Out_ _At_(*Irql, _IRQL_saves_) KIRQL *Irql)
 {
-    NTSTATUS Status = STATUS_INVALID_PARAMETER;
-    ENDPOINT *Endpoint = &Peer->Endpoint;
-    UINT32 UpdateGeneration;
-
-    /* TODO: We should probably cache the results of this to avoid a DoS,
-     * whereby a client sends pings that change src address, resulting in new
-     * lookups on the pong.
-     */
-retry:
     *Irql = ExAcquireSpinLockShared(&Peer->EndpointLock);
-    UpdateGeneration = Endpoint->UpdateGeneration;
-    if (Endpoint->Addr.si_family == AF_INET &&
-        Endpoint->RoutingGeneration == (UINT32)ReadNoFence(&RoutingGenerationV4) && Endpoint->Src4.ipi_ifindex)
+retryWhileHoldingSharedLock:
+    if ((Peer->Endpoint.Addr.si_family == AF_INET &&
+         Peer->Endpoint.RoutingGeneration == (UINT32)ReadNoFence(&RoutingGenerationV4) &&
+         Peer->Endpoint.Src4.ipi_ifindex && Peer->Endpoint.Src4.ipi_ifindex != Peer->Device->InterfaceIndex) ||
+        (Peer->Endpoint.Addr.si_family == AF_INET6 &&
+         Peer->Endpoint.RoutingGeneration == (UINT32)ReadNoFence(&RoutingGenerationV6) &&
+         Peer->Endpoint.Src6.ipi6_ifindex && Peer->Endpoint.Src6.ipi6_ifindex != Peer->Device->InterfaceIndex))
         return STATUS_SUCCESS;
-    if (Endpoint->Addr.si_family == AF_INET6 &&
-        Endpoint->RoutingGeneration == (UINT32)ReadNoFence(&RoutingGenerationV6) && Endpoint->Src6.ipi6_ifindex)
-        return STATUS_SUCCESS;
-    SOCKADDR_INET SrcAddr = { 0 };
+
+    SOCKADDR_INET Addr;
+    UINT32 UpdateGeneration = Peer->Endpoint.UpdateGeneration;
+    RtlCopyMemory(&Addr, &Peer->Endpoint.Addr, sizeof(Addr));
     ExReleaseSpinLockShared(&Peer->EndpointLock, *Irql);
+    SOCKADDR_INET SrcAddr = { 0 };
     ULONG BestIndex = 0, BestCidr = 0, BestMetric = ~0UL;
     NET_LUID BestLuid = { 0 };
     MIB_IPFORWARD_TABLE2 *Table;
-    Status = GetIpForwardTable2(Endpoint->Addr.si_family, &Table);
+    NTSTATUS Status = GetIpForwardTable2(Addr.si_family, &Table);
     if (!NT_SUCCESS(Status))
         return Status;
     union
@@ -263,17 +216,15 @@ retry:
             continue;
         if (Table->Table[i].DestinationPrefix.PrefixLength < BestCidr)
             continue;
-        if (Endpoint->Addr.si_family == AF_INET &&
-            !CidrMaskMatchV4(&Endpoint->Addr.Ipv4.sin_addr, &Table->Table[i].DestinationPrefix))
+        if (Addr.si_family == AF_INET && !CidrMaskMatchV4(&Addr.Ipv4.sin_addr, &Table->Table[i].DestinationPrefix))
             continue;
-        if (Endpoint->Addr.si_family == AF_INET6 &&
-            !CidrMaskMatchV6(&Endpoint->Addr.Ipv6.sin6_addr, &Table->Table[i].DestinationPrefix))
+        if (Addr.si_family == AF_INET6 && !CidrMaskMatchV6(&Addr.Ipv6.sin6_addr, &Table->Table[i].DestinationPrefix))
             continue;
         If->Interface = (MIB_IF_ROW2){ .InterfaceLuid = Table->Table[i].InterfaceLuid };
         if (!NT_SUCCESS(GetIfEntry2(&If->Interface)) || If->Interface.OperStatus != IfOperStatusUp)
             continue;
         If->IpInterface =
-            (MIB_IPINTERFACE_ROW){ .Family = Endpoint->Addr.si_family, .InterfaceLuid = Table->Table[i].InterfaceLuid };
+            (MIB_IPINTERFACE_ROW){ .Family = Addr.si_family, .InterfaceLuid = Table->Table[i].InterfaceLuid };
         if (!NT_SUCCESS(GetIpInterfaceEntry(&If->IpInterface)))
             continue;
         ULONG Metric = Table->Table[i].Metric + If->IpInterface.Metric;
@@ -286,51 +237,48 @@ retry:
     }
     MemFree(If);
     if (Table->NumEntries && BestIndex)
-        Status = GetBestRoute2(NULL, BestIndex, NULL, &Endpoint->Addr, 0, &Table->Table[0], &SrcAddr);
+        Status = GetBestRoute2(&BestLuid, 0, NULL, &Addr, 0, &Table->Table[0], &SrcAddr);
     FreeMibTable(Table);
-    if (!NT_SUCCESS(Status))
-        return Status;
-    *Irql = ExAcquireSpinLockExclusive(&Peer->EndpointLock);
-    if (Endpoint->UpdateGeneration != UpdateGeneration)
-    {
-        ExReleaseSpinLockExclusive(&Peer->EndpointLock, *Irql);
-        goto retry;
-    }
-    if (Endpoint->Addr.si_family == AF_INET)
-    {
-        Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
-        Endpoint->Src4.ipi_addr = SrcAddr.Ipv4.sin_addr;
-        Endpoint->Src4.ipi_ifindex = BestIndex;
-        Endpoint->SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src4));
-        Endpoint->SrcCmsghdr.cmsg_level = IPPROTO_IP;
-        Endpoint->SrcCmsghdr.cmsg_type = IP_PKTINFO;
-    }
-    else if (Endpoint->Addr.si_family == AF_INET6)
-    {
-        Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
-        Endpoint->Src6.ipi6_addr = SrcAddr.Ipv6.sin6_addr;
-        Endpoint->Src6.ipi6_ifindex = BestIndex;
-        Endpoint->SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src6));
-        Endpoint->SrcCmsghdr.cmsg_level = IPPROTO_IPV6;
-        Endpoint->SrcCmsghdr.cmsg_type = IPV6_PKTINFO;
-    }
-    else
-        BestIndex = 0;
-    ++Endpoint->UpdateGeneration, ++UpdateGeneration;
-    ExReleaseSpinLockExclusive(&Peer->EndpointLock, *Irql);
     if (!BestIndex)
         return STATUS_BAD_NETWORK_PATH;
-    *Irql = ExAcquireSpinLockShared(&Peer->EndpointLock);
-    if (Endpoint->UpdateGeneration != UpdateGeneration)
+    if (!NT_SUCCESS(Status))
+        return Status;
+
+    *Irql = ExAcquireSpinLockExclusive(&Peer->EndpointLock);
+    if (UpdateGeneration != Peer->Endpoint.UpdateGeneration)
     {
-        ExReleaseSpinLockShared(&Peer->EndpointLock, *Irql);
-        goto retry;
+        ExReleaseSpinLockExclusiveFromDpcLevel(&Peer->EndpointLock);
+        ExAcquireSpinLockSharedAtDpcLevel(&Peer->EndpointLock);
+        goto retryWhileHoldingSharedLock;
     }
+    if (Peer->Endpoint.Addr.si_family == AF_INET)
+    {
+        Peer->Endpoint.Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src4));
+        Peer->Endpoint.Cmsg.cmsg_level = IPPROTO_IP;
+        Peer->Endpoint.Cmsg.cmsg_type = IP_PKTINFO;
+        Peer->Endpoint.Src4.ipi_addr = SrcAddr.Ipv4.sin_addr;
+        Peer->Endpoint.Src4.ipi_ifindex = BestIndex;
+        Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
+    }
+    else if (Peer->Endpoint.Addr.si_family == AF_INET6)
+    {
+        Peer->Endpoint.Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src6));
+        Peer->Endpoint.Cmsg.cmsg_level = IPPROTO_IPV6;
+        Peer->Endpoint.Cmsg.cmsg_type = IPV6_PKTINFO;
+        Peer->Endpoint.Src6.ipi6_addr = SrcAddr.Ipv6.sin6_addr;
+        Peer->Endpoint.Src6.ipi6_ifindex = BestIndex;
+        Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
+    }
+    ++Peer->Endpoint.UpdateGeneration, ++UpdateGeneration;
+    ExReleaseSpinLockExclusiveFromDpcLevel(&Peer->EndpointLock);
+    ExAcquireSpinLockSharedAtDpcLevel(&Peer->EndpointLock);
+    if (Peer->Endpoint.UpdateGeneration != UpdateGeneration)
+        goto retryWhileHoldingSharedLock;
     return STATUS_SUCCESS;
 }
 
 #pragma warning(suppress : 28194) /* `Nbl` is aliased in Ctx->Nbl or freed on failure. */
-#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpointSrc failure, or \
+#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpoint failure, or \
                                      restored by ExReleaseSpinLockShared */
 _Use_decl_annotations_
 NTSTATUS
@@ -338,20 +286,8 @@ SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepaliv
 {
     if (!First)
         return STATUS_ALREADY_COMPLETE;
-    NTSTATUS Status = STATUS_INSUFFICIENT_RESOURCES;
-    SOCKET_SEND_CTX *Ctx = ExAllocateFromLookasideListEx(&SocketSendCtxCache);
-    if (!Ctx)
-        goto cleanupNbls;
-    KIRQL Irql;
-    Status = SocketResolvePeerEndpointSrc(Peer, &Irql); /* Takes read-side EndpointLock */
-    if (!NT_SUCCESS(Status))
-        goto cleanupCtx;
-    Ctx->Endpoint = Peer->Endpoint;
-    ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
-    Ctx->IsNbl = TRUE;
-    Ctx->FirstNbl = First;
-    *AllKeepalive = TRUE;
 
+    *AllKeepalive = TRUE;
     WSK_BUF_LIST *FirstWskBuf = NULL, *LastWskBuf = NULL;
     ULONG64 DataLength = 0, Packets = 0;
     for (NET_BUFFER_LIST *Nbl = First; Nbl; Nbl = NET_BUFFER_LIST_NEXT_NBL(Nbl))
@@ -370,15 +306,60 @@ SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepaliv
                 *AllKeepalive = FALSE;
         }
     }
-    Status = SendAsync(Peer->Device, Ctx);
+    _Analysis_assume_(FirstWskBuf != NULL);
+
+    NTSTATUS Status = STATUS_INSUFFICIENT_RESOURCES;
+    SOCKET_SEND_CTX *Ctx = ExAllocateFromLookasideListEx(&SocketSendCtxCache);
+    if (!Ctx)
+        goto cleanupNbls;
+    Ctx->FirstNbl = First;
+    Ctx->Wg = Peer->Device;
+    IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
+    IoSetCompletionRoutine(&Ctx->Irp, NblSendComplete, Ctx, TRUE, TRUE, TRUE);
+    KIRQL Irql;
+    Status = SocketResolvePeerEndpoint(Peer, &Irql);
     if (!NT_SUCCESS(Status))
         goto cleanupCtx;
-    Peer->TxBytes += DataLength;
-    Peer->Device->Statistics.ifHCOutOctets += DataLength;
-    Peer->Device->Statistics.ifHCOutUcastOctets += DataLength;
-    Peer->Device->Statistics.ifHCOutUcastPkts += Packets;
-    return STATUS_SUCCESS;
+    SOCKET *Socket = NULL;
+    RcuReadLockAtDpcLevel();
+    if (Peer->Endpoint.Addr.si_family == AF_INET)
+        Socket = RcuDereference(SOCKET, Peer->Device->Sock4);
+    else if (Peer->Endpoint.Addr.si_family == AF_INET6)
+        Socket = RcuDereference(SOCKET, Peer->Device->Sock6);
+    if (!Socket)
+    {
+        Status = STATUS_NETWORK_UNREACHABLE;
+        goto cleanupRcuLock;
+    }
+    PFN_WSK_SEND_MESSAGES WskSendMessages = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskSendMessages;
+#if NTDDI_VERSION == NTDDI_WIN7
+    if (NoWskSendMessages)
+        WskSendMessages = PolyfilledWskSendMessages;
+#endif
+    Status = WskSendMessages(
+        Socket->Sock,
+        FirstWskBuf,
+        0,
+        (PSOCKADDR)&Peer->Endpoint.Addr,
+        (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len),
+        &Peer->Endpoint.Cmsg,
+        &Ctx->Irp);
+    RcuReadUnlockFromDpcLevel();
+    ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
+    if (NT_SUCCESS(Status))
+    {
+        Peer->TxBytes += DataLength;
+        Peer->Device->Statistics.ifHCOutOctets += DataLength;
+        Peer->Device->Statistics.ifHCOutUcastOctets += DataLength;
+        Peer->Device->Statistics.ifHCOutUcastPkts += Packets;
+    }
+    else
+        Peer->Device->Statistics.ifOutErrors += Packets;
+    return Status;
 
+cleanupRcuLock:
+    RcuReadUnlockFromDpcLevel();
+    ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
 cleanupCtx:
     ExFreeToLookasideListEx(&SocketSendCtxCache, Ctx);
 cleanupNbls:
@@ -386,37 +367,58 @@ cleanupNbls:
     return Status;
 }
 
-#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpointSrc failure, or \
+#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpoint failure, or \
                                      restored by ExReleaseSpinLockShared */
 _Use_decl_annotations_
 NTSTATUS
 SocketSendBufferToPeer(WG_PEER *Peer, CONST VOID *Buffer, ULONG Len)
 {
-    NTSTATUS Status;
+    NTSTATUS Status = STATUS_INSUFFICIENT_RESOURCES;
     SOCKET_SEND_CTX *Ctx = ExAllocateFromLookasideListEx(&SocketSendCtxCache);
     if (!Ctx)
-        return STATUS_INSUFFICIENT_RESOURCES;
-    Ctx->IsNbl = FALSE;
+        return Status;
     Ctx->Buffer.Length = Len;
     Ctx->Buffer.Offset = 0;
     Ctx->Buffer.Mdl = MemAllocateDataAndMdlChain(Len);
     if (!Ctx->Buffer.Mdl)
-    {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto cleanupCtx;
-    }
     RtlCopyMemory(MmGetMdlVirtualAddress(Ctx->Buffer.Mdl), Buffer, Len);
+    Ctx->Wg = Peer->Device;
+    IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
+    IoSetCompletionRoutine(&Ctx->Irp, BufferSendComplete, Ctx, TRUE, TRUE, TRUE);
     KIRQL Irql;
-    Status = SocketResolvePeerEndpointSrc(Peer, &Irql); /* Takes read-side endpoint_lock */
+    Status = SocketResolvePeerEndpoint(Peer, &Irql);
     if (!NT_SUCCESS(Status))
         goto cleanupMdl;
-    Ctx->Endpoint = Peer->Endpoint;
+    SOCKET *Socket = NULL;
+    RcuReadLockAtDpcLevel();
+    if (Peer->Endpoint.Addr.si_family == AF_INET)
+        Socket = RcuDereference(SOCKET, Peer->Device->Sock4);
+    else if (Peer->Endpoint.Addr.si_family == AF_INET6)
+        Socket = RcuDereference(SOCKET, Peer->Device->Sock6);
+    if (!Socket)
+    {
+        Status = STATUS_NETWORK_UNREACHABLE;
+        goto cleanupRcuLock;
+    }
+    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)
+                 ->WskSendTo(
+                     Socket->Sock,
+                     &Ctx->Buffer,
+                     0,
+                     (PSOCKADDR)&Peer->Endpoint.Addr,
+                     (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len),
+                     &Peer->Endpoint.Cmsg,
+                     &Ctx->Irp);
+    RcuReadUnlockFromDpcLevel();
     ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
-    Status = SendAsync(Peer->Device, Ctx);
-    if (!NT_SUCCESS(Status))
-        goto cleanupMdl;
-    Peer->TxBytes += Len;
-    return STATUS_SUCCESS;
+    if (NT_SUCCESS(Status))
+        Peer->TxBytes += Len;
+    return Status;
+
+cleanupRcuLock:
+    RcuReadUnlockFromDpcLevel();
+    ExReleaseSpinLockShared(&Peer->EndpointLock, Irql);
 cleanupMdl:
     MemFreeDataAndMdlChain(Ctx->Buffer.Mdl);
 cleanupCtx:
@@ -428,27 +430,52 @@ _Use_decl_annotations_
 NTSTATUS
 SocketSendBufferAsReplyToNbl(WG_DEVICE *Wg, CONST NET_BUFFER_LIST *InNbl, CONST VOID *Buffer, ULONG Len)
 {
-    NTSTATUS Status;
+    NTSTATUS Status = STATUS_INSUFFICIENT_RESOURCES;
     SOCKET_SEND_CTX *Ctx = ExAllocateFromLookasideListEx(&SocketSendCtxCache);
     if (!Ctx)
-        return STATUS_INSUFFICIENT_RESOURCES;
-    Ctx->IsNbl = FALSE;
+        return Status;
     Ctx->Buffer.Length = Len;
     Ctx->Buffer.Offset = 0;
     Ctx->Buffer.Mdl = MemAllocateDataAndMdlChain(Len);
     if (!Ctx->Buffer.Mdl)
-    {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto cleanupCtx;
-    }
     RtlCopyMemory(MmGetMdlVirtualAddress(Ctx->Buffer.Mdl), Buffer, Len);
-    Status = SocketEndpointFromNbl(&Ctx->Endpoint, InNbl);
+    Ctx->Wg = Wg;
+    IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
+    IoSetCompletionRoutine(&Ctx->Irp, BufferSendComplete, Ctx, TRUE, TRUE, TRUE);
+    ENDPOINT Endpoint;
+    Status = SocketEndpointFromNbl(&Endpoint, InNbl);
     if (!NT_SUCCESS(Status))
         goto cleanupMdl;
-    Status = SendAsync(Wg, Ctx);
-    if (!NT_SUCCESS(Status))
+    Status = STATUS_BAD_NETWORK_PATH;
+    if ((Endpoint.Addr.si_family == AF_INET && Endpoint.Src4.ipi_ifindex == Wg->InterfaceIndex) ||
+        (Endpoint.Addr.si_family == AF_INET6 && Endpoint.Src6.ipi6_ifindex == Wg->InterfaceIndex))
         goto cleanupMdl;
-    return STATUS_SUCCESS;
+    KIRQL Irql = RcuReadLock();
+    SOCKET *Socket = NULL;
+    if (Endpoint.Addr.si_family == AF_INET)
+        Socket = RcuDereference(SOCKET, Wg->Sock4);
+    else if (Endpoint.Addr.si_family == AF_INET6)
+        Socket = RcuDereference(SOCKET, Wg->Sock6);
+    if (!Socket)
+    {
+        Status = STATUS_NETWORK_UNREACHABLE;
+        goto cleanupRcuLock;
+    }
+    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)
+                 ->WskSendTo(
+                     Socket->Sock,
+                     &Ctx->Buffer,
+                     0,
+                     (PSOCKADDR)&Endpoint.Addr,
+                     (ULONG)WSA_CMSGDATA_ALIGN(Endpoint.Cmsg.cmsg_len),
+                     &Endpoint.Cmsg,
+                     &Ctx->Irp);
+    RcuReadUnlock(Irql);
+    return Status;
+
+cleanupRcuLock:
+    RcuReadUnlock(Irql);
 cleanupMdl:
     MemFreeDataAndMdlChain(Ctx->Buffer.Mdl);
 cleanupCtx:
@@ -484,20 +511,20 @@ SocketEndpointFromNbl(ENDPOINT *Endpoint, CONST NET_BUFFER_LIST *Nbl)
     if (Addr->sa_family == AF_INET && (Pktinfo = FindInCmsgHdr(Data, IPPROTO_IP, IP_PKTINFO)) != NULL)
     {
         Endpoint->Addr.Ipv4 = *(SOCKADDR_IN *)Addr;
+        Endpoint->Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src4));
+        Endpoint->Cmsg.cmsg_level = IPPROTO_IP;
+        Endpoint->Cmsg.cmsg_type = IP_PKTINFO;
         Endpoint->Src4 = *(IN_PKTINFO *)Pktinfo;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
-        Endpoint->SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src4));
-        Endpoint->SrcCmsghdr.cmsg_level = IPPROTO_IP;
-        Endpoint->SrcCmsghdr.cmsg_type = IP_PKTINFO;
     }
     else if (Addr->sa_family == AF_INET6 && (Pktinfo = FindInCmsgHdr(Data, IPPROTO_IPV6, IPV6_PKTINFO)) != NULL)
     {
         Endpoint->Addr.Ipv6 = *(SOCKADDR_IN6 *)Addr;
+        Endpoint->Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src6));
+        Endpoint->Cmsg.cmsg_level = IPPROTO_IPV6;
+        Endpoint->Cmsg.cmsg_type = IPV6_PKTINFO;
         Endpoint->Src6 = *(IN6_PKTINFO *)Pktinfo;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
-        Endpoint->SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src6));
-        Endpoint->SrcCmsghdr.cmsg_level = IPPROTO_IPV6;
-        Endpoint->SrcCmsghdr.cmsg_type = IPV6_PKTINFO;
     }
     else
         return STATUS_INVALID_ADDRESS;
@@ -543,23 +570,23 @@ SocketSetPeerEndpoint(WG_PEER *Peer, CONST ENDPOINT *Endpoint)
     if (Endpoint->Addr.si_family == AF_INET)
     {
         Peer->Endpoint.Addr.Ipv4 = Endpoint->Addr.Ipv4;
-        Peer->Endpoint.Src4 = Endpoint->Src4;
-        Peer->Endpoint.SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src4));
-        Peer->Endpoint.SrcCmsghdr.cmsg_level = IPPROTO_IP;
-        Peer->Endpoint.SrcCmsghdr.cmsg_type = IP_PKTINFO;
+        if (Endpoint->Src4.ipi_ifindex != Peer->Device->InterfaceIndex)
+        {
+            Peer->Endpoint.Cmsg = Endpoint->Cmsg;
+            Peer->Endpoint.Src4 = Endpoint->Src4;
+        }
     }
     else if (Endpoint->Addr.si_family == AF_INET6)
     {
         Peer->Endpoint.Addr.Ipv6 = Endpoint->Addr.Ipv6;
-        Peer->Endpoint.Src6 = Endpoint->Src6;
-        Peer->Endpoint.SrcCmsghdr.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src6));
-        Peer->Endpoint.SrcCmsghdr.cmsg_level = IPPROTO_IPV6;
-        Peer->Endpoint.SrcCmsghdr.cmsg_type = IPV6_PKTINFO;
+        if (Endpoint->Src6.ipi6_ifindex != Peer->Device->InterfaceIndex)
+        {
+            Peer->Endpoint.Cmsg = Endpoint->Cmsg;
+            Peer->Endpoint.Src6 = Endpoint->Src6;
+        }
     }
     else
-    {
         goto out;
-    }
     Peer->Endpoint.RoutingGeneration = Endpoint->RoutingGeneration;
     ++Peer->Endpoint.UpdateGeneration;
 out:

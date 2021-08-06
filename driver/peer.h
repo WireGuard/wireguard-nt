@@ -19,8 +19,8 @@ typedef struct _ENDPOINT
     {
         union
         {
-            WSACMSGHDR SrcCmsghdr;
-            CHAR __Alignment[WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR))];
+            WSACMSGHDR Cmsg;
+            UCHAR __Alignment[WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR))];
         };
         union
         {
