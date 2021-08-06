@@ -205,7 +205,7 @@ SendNetBufferLists(
         {
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_FAILURE;
             ++Wg->Statistics.ifOutErrors;
-            goto cleanupICMP;
+            goto returnNbl;
         }
         ADDRESS_FAMILY Family = ReadUShortNoFence(&Peer->Endpoint.Addr.si_family);
         if (Family != AF_INET && Family != AF_INET6)
@@ -241,10 +241,6 @@ SendNetBufferLists(
 
     cleanupPeer:
         PeerPut(Peer);
-    cleanupICMP:
-        /* TODO: If v4, send ICMP_DEST_UNREACH/ICMP_HOST_UNREACH.
-         *       If v6, send ICMPV6_DEST_UNREACH/ICMPV6_ADDR_UNREACH.
-         */
     returnNbl:
         FreeSendNetBufferList(Wg, Nbl, CompleteFlags);
         ++Wg->Statistics.ifOutDiscards;
