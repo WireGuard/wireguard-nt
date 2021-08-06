@@ -336,14 +336,11 @@ PacketEncryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
         {
             for (NET_BUFFER *NbIn = NET_BUFFER_LIST_FIRST_NB(Nbl->ParentNetBufferList),
                             *NbOut = NET_BUFFER_LIST_FIRST_NB(Nbl);
-                 NbIn && NbOut;
+                 NbIn && NbOut && State == PACKET_STATE_CRYPTED;
                  NbIn = NET_BUFFER_NEXT_NB(NbIn), NbOut = NET_BUFFER_NEXT_NB(NbOut))
             {
                 if (!EncryptPacket(&Simd, NbOut, NbIn, Keypair, Mtu))
-                {
                     State = PACKET_STATE_DEAD;
-                    goto enqueue;
-                }
             }
             if (Nbl != Nbl->ParentNetBufferList)
             {
@@ -351,7 +348,6 @@ PacketEncryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
                 Nbl->ParentNetBufferList = Nbl;
             }
         }
-    enqueue:
         _Analysis_assume_(First != NULL);
         QueueEnqueuePerPeer(&Peer->Device->TxQueue, &Peer->TxSerialEntry, First, State);
         ProcessPerPeerWork(&Wg->TxQueue);

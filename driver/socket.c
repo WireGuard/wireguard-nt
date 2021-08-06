@@ -285,21 +285,7 @@ retry:
         BestLuid = Table->Table[i].InterfaceLuid;
     }
     MemFree(If);
-    /* We disable wg-loop routing for now, to prevent stack overflow. TODO: revisit later. */
-    Status = STATUS_SUCCESS;
-    MuAcquirePushLockShared(&DeviceListLock);
-    WG_DEVICE *Wg;
-    LIST_FOR_EACH_ENTRY (Wg, &DeviceList, WG_DEVICE, DeviceList)
-    {
-        if (Wg->InterfaceLuid.Value == BestLuid.Value)
-        {
-            LogInfoRatelimited(Peer->Device, "Dropping packet that would egress via interface %u", Wg->InterfaceIndex);
-            Status = STATUS_RECURSIVE_DISPATCH;
-            break;
-        }
-    }
-    MuReleasePushLockShared(&DeviceListLock);
-    if (NT_SUCCESS(Status) && Table->NumEntries && BestIndex)
+    if (Table->NumEntries && BestIndex)
         Status = GetBestRoute2(NULL, BestIndex, NULL, &Endpoint->Addr, 0, &Table->Table[0], &SrcAddr);
     FreeMibTable(Table);
     if (!NT_SUCCESS(Status))
