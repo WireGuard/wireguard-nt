@@ -15,9 +15,6 @@
 #include <ntifs.h> /* Must be included before <wdm.h> */
 #include <wdm.h>
 
-extern LIST_ENTRY DeviceList;
-extern EX_PUSH_LOCK DeviceListLock;
-
 typedef struct _PREV_QUEUE
 {
     NET_BUFFER_LIST *Head, *Tail, *Peeked;

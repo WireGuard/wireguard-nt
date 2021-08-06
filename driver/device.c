@@ -32,8 +32,8 @@ static NDIS_HANDLE NdisMiniportDriverHandle;
 static HANDLE IpInterfaceNotifier;
 static PKTHREAD IpInterfaceNotifierBugWorkaroundThread;
 static KEVENT IpInterfaceNotifierBugWorkaroundTerminate;
-LIST_ENTRY DeviceList;
-EX_PUSH_LOCK DeviceListLock;
+static LIST_ENTRY DeviceList;
+static EX_PUSH_LOCK DeviceListLock;
 
 MINIPORT_UNLOAD Unload;
 
