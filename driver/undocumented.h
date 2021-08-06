@@ -8,8 +8,9 @@
 #include <ntifs.h> /* Must be included before <wdm.h> */
 #include <wdm.h>
 
-typedef enum
+typedef enum _SYSTEM_INFORMATION_CLASS
 {
+    SystemBasicInformation = 0x0,
     SystemExtendedHandleInformation = 0x40
 } SYSTEM_INFORMATION_CLASS;
 
@@ -33,20 +34,16 @@ typedef struct _SYSTEM_HANDLE_INFORMATION_EX
 } SYSTEM_HANDLE_INFORMATION_EX, *PSYSTEM_HANDLE_INFORMATION_EX;
 
 NTSYSAPI
-NTSTATUS
-NTAPI
+NTSTATUS NTAPI
 ZwQuerySystemInformation(
-    SYSTEM_INFORMATION_CLASS SystemInformationClass,
-    PVOID SystemInformation,
-    ULONG SystemInformationLength,
-    ULONG *ReturnLength);
+    _In_ SYSTEM_INFORMATION_CLASS SystemInformationClass,
+    _Out_bytecap_post_bytecount_(SystemInformationLength, *ReturnLength) PVOID SystemInformation,
+    _In_ ULONG SystemInformationLength,
+    _Out_opt_ PULONG ReturnLength);
 
 NTSYSAPI
-NTSTATUS
-NTAPI
-ZwYieldExecution(VOID);
+NTSTATUS NTAPI ZwYieldExecution(VOID);
 
 NTSYSAPI
-BOOLEAN
-NTAPI
+BOOLEAN NTAPI
 SystemPrng(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len);
