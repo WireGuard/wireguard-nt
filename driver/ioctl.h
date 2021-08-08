@@ -6,7 +6,6 @@
 #pragma once
 
 #ifdef _KERNEL_MODE
-#    include "device.h"
 #    include <ntifs.h> /* Must be included before <wdm.h> */
 #    include <wdm.h>
 #    include <ndis.h>
@@ -22,7 +21,6 @@
 #pragma warning(disable : 4324) /* structure was padded due to alignment specifier */
 
 #define WG_KEY_LEN 32
-#define WG_MAX_LOG_LINE_LEN 128
 
 typedef __declspec(align(8)) struct _WG_IOCTL_ALLOWED_IP
 {
@@ -85,6 +83,12 @@ typedef enum
     WG_IOCTL_ADAPTER_STATE_QUERY = 2
 } WG_IOCTL_ADAPTER_STATE;
 
+typedef __declspec(align(8)) struct _WG_IOCTL_LOG_ENTRY
+{
+    ULONG64 Timestamp;
+    CHAR Msg[120];
+} WG_IOCTL_LOG_ENTRY;
+
 /* Get adapter properties.
  *
  * The lpOutBuffer and nOutBufferSize parameters of DeviceIoControl() must describe an user allocated buffer
@@ -108,6 +112,8 @@ typedef enum
 #define WG_IOCTL_READ_LOG_LINE CTL_CODE(45208U, 324, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 
 #ifdef _KERNEL_MODE
+
+typedef struct _WG_DEVICE WG_DEVICE;
 
 _IRQL_requires_max_(APC_LEVEL)
 _Requires_lock_not_held_(_Global_critical_region_)

@@ -44,24 +44,24 @@ WriteFormatted(_In_ DWORD StdHandle, _In_z_ LPCWSTR Template, ...)
 }
 
 static VOID CALLBACK
-ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ LPCWSTR LogLine)
+ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_ DWORD64 Timestamp, _In_z_ LPCWSTR LogLine)
 {
     LPCWSTR Template;
     switch (Level)
     {
     case WIREGUARD_LOG_INFO:
-        Template = L"[+] %1\n";
+        Template = L"[+ %1!I64u!] %2\n";
         break;
     case WIREGUARD_LOG_WARN:
-        Template = L"[-] %1\n";
+        Template = L"[- %1!I64u!] %2\n";
         break;
     case WIREGUARD_LOG_ERR:
-        Template = L"[!] %1\n";
+        Template = L"[! %1!I64u!] %2\n";
         break;
     default:
         return;
     }
-    WriteFormatted(STD_ERROR_HANDLE, Template, LogLine);
+    WriteFormatted(STD_ERROR_HANDLE, Template, Timestamp, LogLine);
 }
 
 VOID __stdcall CreateAdapter(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
@@ -265,53 +265,23 @@ ProcessStdout(_Inout_ PROCESS_STDOUT_STATE *State)
 static DWORD WINAPI
 ProcessStderr(_In_ HANDLE Stderr)
 {
-    enum
-    {
-        OnNone,
-        OnLevelStart,
-        OnLevel,
-        OnLevelEnd,
-        OnSpace,
-        OnMsg
-    } State = OnNone;
-    WCHAR Msg[0x200];
-    DWORD Count = 0;
-    WIREGUARD_LOGGER_LEVEL Level = WIREGUARD_LOG_INFO;
+    WCHAR Msg[0x200], Buf[0x220], LevelRune;
+    DWORD64 Timestamp;
+    DWORD SizeRead;
+    WIREGUARD_LOGGER_LEVEL Level;
     for (;;)
     {
-        WCHAR Buf[0x200];
-        DWORD SizeRead;
-        if (!ReadFile(Stderr, Buf, sizeof(Buf), &SizeRead, NULL))
+        if (!ReadFile(Stderr, Buf, sizeof(Buf), &SizeRead, NULL) || !SizeRead)
             return ERROR_SUCCESS;
         if (SizeRead % sizeof(*Buf))
             return ERROR_INVALID_DATA;
-        SizeRead /= sizeof(*Buf);
-        for (DWORD i = 0; i < SizeRead; ++i)
-        {
-            WCHAR c = Buf[i];
-            if (State == OnNone && c == L'[')
-                State = OnLevelStart;
-            else if (
-                State == OnLevelStart &&
-                ((Level = WIREGUARD_LOG_INFO, c == L'+') || (Level = WIREGUARD_LOG_WARN, c == L'-') ||
-                 (Level = WIREGUARD_LOG_ERR, c == L'!')))
-                State = OnLevelEnd;
-            else if (State == OnLevelEnd && c == L']')
-                State = OnSpace;
-            else if (State == OnSpace && !iswspace(c) || State == OnMsg && c != L'\r' && c != L'\n')
-            {
-                if (Count < _countof(Msg) - 1)
-                    Msg[Count++] = c;
-                State = OnMsg;
-            }
-            else if (State == OnMsg && c == L'\n')
-            {
-                Msg[Count] = 0;
-                LoggerLog(Level, NULL, Msg);
-                State = OnNone;
-                Count = 0;
-            }
-        }
+        Msg[0] = Buf[SizeRead / sizeof(*Buf) - 1] = L'\0';
+        if (swscanf_s(Buf, L"[%c %I64u] %[^\n]", &LevelRune, 1, &Timestamp, Msg, (DWORD)_countof(Msg)) != 3 || !Msg[0])
+            return ERROR_INVALID_DATA;
+        if (!((Level = WIREGUARD_LOG_INFO, LevelRune == L'+') || (Level = WIREGUARD_LOG_WARN, LevelRune == L'-') ||
+              (Level = WIREGUARD_LOG_ERR, LevelRune == L'!')))
+            return ERROR_INVALID_DATA;
+        Logger(Level, Timestamp, Msg);
     }
 }
 

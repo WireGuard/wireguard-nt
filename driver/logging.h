@@ -9,6 +9,7 @@
 #include <wdm.h>
 #include <ndis.h>
 #include <wsk.h>
+#include "ioctl.h"
 
 #define LOG_DRIVER_PREFIX "wireguard: "
 #define LOG_DEVICE_PREFIX "%u: "
@@ -74,14 +75,13 @@
 
 enum
 {
-    MAX_LOG_LINE_LEN = 128,
     BUFFERED_LOG_ENTRIES = 64,
     BUFFERED_LOG_ENTRIES_MASK = BUFFERED_LOG_ENTRIES - 1,
 };
 
 typedef struct _LOG_RING
 {
-    CHAR Entries[BUFFERED_LOG_ENTRIES][MAX_LOG_LINE_LEN];
+    WG_IOCTL_LOG_ENTRY Entries[BUFFERED_LOG_ENTRIES];
     LONG FirstAndLength;
     LONG CurrentWriters;
     KEVENT NewEntry;
@@ -102,7 +102,7 @@ _IRQL_requires_max_(APC_LEVEL)
 NTSTATUS
 LogRingRead(
     _Inout_ LOG_RING *Log,
-    _Out_writes_bytes_all_(MAX_LOG_LINE_LEN) CHAR Line[MAX_LOG_LINE_LEN],
+    _Out_ WG_IOCTL_LOG_ENTRY *Entry,
     _In_ BOOLEAN *WhileFalse);
 
 _IRQL_requires_max_(DISPATCH_LEVEL)

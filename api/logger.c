@@ -14,12 +14,19 @@
 #include <stdlib.h>
 
 static BOOL CALLBACK
-NopLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ LPCWSTR LogLine)
+NopLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_ DWORD64 Timestamp, _In_z_ LPCWSTR LogLine)
 {
     return TRUE;
 }
 
 WIREGUARD_LOGGER_CALLBACK Logger = NopLogger;
+
+static DWORD64 Now(VOID)
+{
+    LARGE_INTEGER Timestamp;
+    NtQuerySystemTime(&Timestamp);
+    return Timestamp.QuadPart;
+}
 
 _Use_decl_annotations_
 VOID WINAPI
@@ -47,10 +54,10 @@ LoggerLog(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR Function, LPCWSTR LogLine)
         WCHAR Combined[0x400];
         if (_snwprintf_s(Combined, _countof(Combined), _TRUNCATE, L"%s: %s", Function, LogLine) == -1)
             StrTruncate(Combined, _countof(Combined));
-        Logger(Level, Combined);
+        Logger(Level, Now(), Combined);
     }
     else
-        Logger(Level, LogLine);
+        Logger(Level, Now(), LogLine);
     SetLastError(LastError);
     return LastError;
 }
@@ -66,7 +73,7 @@ LoggerLogV(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR Function, LPCWSTR Format, va_li
     if (Function)
         LoggerLog(Level, Function, LogLine);
     else
-        Logger(Level, LogLine);
+        Logger(Level, Now(), LogLine);
     SetLastError(LastError);
     return LastError;
 }
@@ -94,7 +101,7 @@ LoggerError(DWORD Error, LPCWSTR Function, LPCWSTR Prefix)
         0,
         (va_list *)(DWORD_PTR[]){ (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage, (DWORD_PTR)Function });
     if (FormattedMessage)
-        Logger(WIREGUARD_LOG_ERR, FormattedMessage);
+        Logger(WIREGUARD_LOG_ERR, Now(), FormattedMessage);
     LocalFree(FormattedMessage);
     LocalFree(SystemMessage);
     return Error;
@@ -151,10 +158,10 @@ LogReaderThread(_In_ LPVOID Parameter)
     }
     while (ReadULongNoFence(&Adapter->LogState) != WIREGUARD_ADAPTER_LOG_OFF)
     {
-        WCHAR WideLine[WG_MAX_LOG_LINE_LEN + 32] = { 0 };
-        CHAR Line[WG_MAX_LOG_LINE_LEN] = { 0 };
-        DWORD Bytes = sizeof(Line);
-        if (!DeviceIoControl(ControlFile, WG_IOCTL_READ_LOG_LINE, NULL, 0, Line, Bytes, &Bytes, NULL))
+        WG_IOCTL_LOG_ENTRY Entry = { 0 };
+        WCHAR WideLine[sizeof(Entry.Msg) + 32] = { 0 };
+        DWORD Bytes = sizeof(Entry);
+        if (!DeviceIoControl(ControlFile, WG_IOCTL_READ_LOG_LINE, NULL, 0, &Entry, Bytes, &Bytes, NULL))
         {
             BOOL IsAbort = GetLastError() == ERROR_OPERATION_ABORTED;
             CloseHandle(ControlFile);
@@ -182,11 +189,11 @@ LogReaderThread(_In_ LPVOID Parameter)
             continue;
         }
         WIREGUARD_LOGGER_LEVEL Level;
-        if (Line[0] == '1')
+        if (Entry.Msg[0] == '1')
             Level = WIREGUARD_LOG_ERR;
-        else if (Line[0] == '2')
+        else if (Entry.Msg[0] == '2')
             Level = WIREGUARD_LOG_WARN;
-        else if (Line[0] == '3')
+        else if (Entry.Msg[0] == '3')
             Level = WIREGUARD_LOG_INFO;
         else
             continue;
@@ -201,9 +208,9 @@ LogReaderThread(_In_ LPVOID Parameter)
             }
             Offset = swprintf_s(WideLine, _countof(WideLine), L"%u: ", Adapter->IfIndex);
         }
-        if (!MultiByteToWideChar(CP_UTF8, 0, &Line[1], -1, WideLine + Offset, _countof(WideLine) - Offset))
+        if (!MultiByteToWideChar(CP_UTF8, 0, &Entry.Msg[1], -1, WideLine + Offset, _countof(WideLine) - Offset))
             continue;
-        Logger(Level, WideLine);
+        Logger(Level, Entry.Timestamp, WideLine);
     }
     CloseHandle(ControlFile);
     return 0;

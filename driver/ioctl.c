@@ -571,14 +571,14 @@ ReadLogLine(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     }
 
     IO_STACK_LOCATION *Stack = IoGetCurrentIrpStackLocation(Irp);
-    if (Stack->Parameters.DeviceIoControl.OutputBufferLength < WG_MAX_LOG_LINE_LEN)
+    if (Stack->Parameters.DeviceIoControl.OutputBufferLength < sizeof(WG_IOCTL_LOG_ENTRY))
     {
         Irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL;
         return;
     }
     Irp->IoStatus.Status = LogRingRead(&Wg->Log, Irp->AssociatedIrp.SystemBuffer, &Wg->IsDeviceRemoving);
     if (NT_SUCCESS(Irp->IoStatus.Status))
-        Irp->IoStatus.Information = WG_MAX_LOG_LINE_LEN;
+        Irp->IoStatus.Information = sizeof(WG_IOCTL_LOG_ENTRY);
 }
 
 static KSTART_ROUTINE ForceCloseHandlesAfterDelay;

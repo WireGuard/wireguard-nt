@@ -195,9 +195,14 @@ typedef enum
  *
  * @param Level         Message level.
  *
+ * @param Timestamp     Message timestamp in in 100ns intervals since 1601-01-01 UTC.
+ *
  * @param Message       Message text.
  */
-typedef VOID(CALLBACK *WIREGUARD_LOGGER_CALLBACK)(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ LPCWSTR Message);
+typedef VOID(CALLBACK *WIREGUARD_LOGGER_CALLBACK)(
+    _In_ WIREGUARD_LOGGER_LEVEL Level,
+    _In_ DWORD64 Timestamp,
+    _In_z_ LPCWSTR Message);
 
 /**
  * Sets logger callback function.

@@ -5,9 +5,8 @@
 
 #include "logging.h"
 #include "ioctl.h"
+#include "device.h"
 #include <ntstrsafe.h>
-
-static_assert(WG_MAX_LOG_LINE_LEN == MAX_LOG_LINE_LEN, "Log length mismatch");
 
 _Use_decl_annotations_
 VOID
@@ -27,6 +26,9 @@ _Use_decl_annotations_
 VOID
 LogRingWrite(LOG_RING *Log, PCSTR Format, ...)
 {
+    LARGE_INTEGER Timestamp;
+    KeQuerySystemTime(&Timestamp);
+
     if (InterlockedIncrement(&Log->CurrentWriters) >= BUFFERED_LOG_ENTRIES - 1)
         goto out; /* Drop log entries if there's contention, rather than block. */
 
@@ -46,9 +48,10 @@ LogRingWrite(LOG_RING *Log, PCSTR Format, ...)
         OldFal = CurFal;
     }
 
+    Log->Entries[Index].Timestamp = Timestamp.QuadPart;
     va_list Args;
     va_start(Args, Format);
-    RtlStringCbVPrintfA(Log->Entries[Index], MAX_LOG_LINE_LEN, Format, Args);
+    RtlStringCbVPrintfA(Log->Entries[Index].Msg, sizeof(Log->Entries[Index].Msg), Format, Args);
     va_end(Args);
     KeSetEvent(&Log->NewEntry, IO_NO_INCREMENT, FALSE);
 out:
@@ -57,7 +60,7 @@ out:
 
 _Use_decl_annotations_
 NTSTATUS
-LogRingRead(LOG_RING *Log, CHAR Line[MAX_LOG_LINE_LEN], BOOLEAN *WhileFalse)
+LogRingRead(LOG_RING *Log, WG_IOCTL_LOG_ENTRY *Entry, BOOLEAN *WhileFalse)
 {
     NTSTATUS Status;
 
@@ -78,7 +81,7 @@ LogRingRead(LOG_RING *Log, CHAR Line[MAX_LOG_LINE_LEN], BOOLEAN *WhileFalse)
                 break;
             OldFal = CurFal;
         }
-        RtlCopyMemory(Line, Log->Entries[Index], MAX_LOG_LINE_LEN);
+        RtlCopyMemory(Entry, &Log->Entries[Index], sizeof(*Entry));
         return STATUS_SUCCESS;
 
     wait:

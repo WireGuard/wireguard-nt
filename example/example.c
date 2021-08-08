@@ -68,12 +68,10 @@ InitializeWireGuardNT(void)
 }
 
 static void CALLBACK
-ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ const WCHAR *LogLine)
+ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_ DWORD64 Timestamp, _In_z_ const WCHAR *LogLine)
 {
-    FILETIME Timestamp;
-    GetSystemTimePreciseAsFileTime(&Timestamp);
     SYSTEMTIME SystemTime;
-    FileTimeToSystemTime(&Timestamp, &SystemTime);
+    FileTimeToSystemTime((FILETIME *)&Timestamp, &SystemTime);
     WCHAR LevelMarker;
     switch (Level)
     {
@@ -103,6 +101,13 @@ ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ const WCHAR *LogLine)
         LogLine);
 }
 
+static DWORD64 Now(VOID)
+{
+    LARGE_INTEGER Timestamp;
+    NtQuerySystemTime(&Timestamp);
+    return Timestamp.QuadPart;
+}
+
 static DWORD
 LogError(_In_z_ const WCHAR *Prefix, _In_ DWORD Error)
 {
@@ -125,7 +130,7 @@ LogError(_In_z_ const WCHAR *Prefix, _In_ DWORD Error)
         0,
         (va_list *)(DWORD_PTR[]){ (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage });
     if (FormattedMessage)
-        ConsoleLogger(WIREGUARD_LOG_ERR, FormattedMessage);
+        ConsoleLogger(WIREGUARD_LOG_ERR, Now(), FormattedMessage);
     LocalFree(FormattedMessage);
     LocalFree(SystemMessage);
     return Error;
@@ -148,7 +153,7 @@ Log(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_z_ const WCHAR *Format, ...)
     va_start(args, Format);
     _vsnwprintf_s(LogLine, _countof(LogLine), _TRUNCATE, Format, args);
     va_end(args);
-    ConsoleLogger(Level, LogLine);
+    ConsoleLogger(Level, Now(), LogLine);
 }
 
 _Must_inspect_result_
@@ -442,10 +447,9 @@ int __cdecl main(void)
             LastError = LogError(L"Failed to get configuration", GetLastError());
             goto cleanupAdapter;
         }
-        FILETIME Timestamp;
-        GetSystemTimePreciseAsFileTime(&Timestamp);
+        DWORD64 Timestamp = Now();
         SYSTEMTIME SystemTime;
-        FileTimeToSystemTime(&Timestamp, &SystemTime);
+        FileTimeToSystemTime((FILETIME *)&Timestamp, &SystemTime);
         fwprintf(
             stderr,
             L"%04u-%02u-%02u %02u:%02u:%02u.%04u [#] RX: %llu, TX: %llu\r",
