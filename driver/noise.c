@@ -425,7 +425,7 @@ MixPrecomputedDh(
     _Out_writes_bytes_all_opt_(NOISE_SYMMETRIC_KEY_LEN) UINT8 Key[NOISE_SYMMETRIC_KEY_LEN],
     _In_reads_bytes_(NOISE_PUBLIC_KEY_LEN) CONST UINT8 Precomputed[NOISE_PUBLIC_KEY_LEN])
 {
-    if (Curve25519IsNull(Precomputed))
+    if (CryptoIsZero32(Precomputed))
         return FALSE;
     Kdf(ChainingKey,
         Key,

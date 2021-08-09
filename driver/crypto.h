@@ -97,6 +97,23 @@ CryptoEqualMemory32(_In_reads_bytes_(32) CONST VOID *Data1, _In_reads_bytes_(32)
     return !NotEqual;
 }
 
+_Must_inspect_result_
+static FORCEINLINE BOOLEAN
+CryptoIsZero32(_In_reads_bytes_(32) CONST VOID *Data)
+{
+#if _WIN64
+    CONST volatile ULONG64 *D = (CONST volatile ULONG64 *)Data;
+    volatile ULONG64 NotZero =
+        ReadULong64NoFence(&D[0]) | ReadULong64NoFence(&D[1]) | ReadULong64NoFence(&D[2]) | ReadULong64NoFence(&D[3]);
+#else
+    CONST volatile ULONG *D = (CONST volatile ULONG *)Data;
+    volatile ULONG NotZero = ReadULongNoFence(&D[0]) | ReadULongNoFence(&D[1]) | ReadULongNoFence(&D[2]) |
+                             ReadULongNoFence(&D[3]) | ReadULongNoFence(&D[4]) | ReadULongNoFence(&D[5]) |
+                             ReadULongNoFence(&D[6]) | ReadULongNoFence(&D[7]);
+#endif
+    return !NotZero;
+}
+
 #pragma warning(disable : 28159) /* We're bug checking in case somebody's RNG is borked. */
 static inline VOID
 CryptoRandom(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len)
@@ -341,23 +358,6 @@ Curve25519GenerateSecret(_Out_writes_bytes_all_(CURVE25519_KEY_SIZE) UINT8 Secre
 {
     CryptoRandom(Secret, CURVE25519_KEY_SIZE);
     Curve25519ClampSecret(Secret);
-}
-
-_Must_inspect_result_
-static FORCEINLINE BOOLEAN
-Curve25519IsNull(_In_reads_bytes_(CURVE25519_KEY_SIZE) CONST UINT8 Pub[CURVE25519_KEY_SIZE])
-{
-#if _WIN64
-    CONST volatile ULONG64 *P = (CONST volatile ULONG64 *)Pub;
-    volatile ULONG64 NotZero =
-        ReadULong64NoFence(&P[0]) | ReadULong64NoFence(&P[1]) | ReadULong64NoFence(&P[2]) | ReadULong64NoFence(&P[3]);
-#else
-    CONST volatile ULONG *P = (CONST volatile ULONG *)Pub;
-    volatile ULONG NotZero = ReadULongNoFence(&P[0]) | ReadULongNoFence(&P[1]) | ReadULongNoFence(&P[2]) |
-                             ReadULongNoFence(&P[3]) | ReadULongNoFence(&P[4]) | ReadULongNoFence(&P[5]) |
-                             ReadULongNoFence(&P[6]) | ReadULongNoFence(&P[7]);
-#endif
-    return !NotZero;
 }
 
 VOID CryptoDriverEntry(VOID);

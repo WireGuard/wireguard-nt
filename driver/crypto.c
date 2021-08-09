@@ -2855,7 +2855,7 @@ Curve25519(
     RtlSecureZeroMemory(&X3l, sizeof(X3l));
     RtlSecureZeroMemory(&E, sizeof(E));
 
-    return !Curve25519IsNull(Out);
+    return !CryptoIsZero32(Out);
 }
 
 #ifdef DBG

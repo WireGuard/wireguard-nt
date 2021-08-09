@@ -150,8 +150,12 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
             IoctlPeer->AllowedIPsCount = 0;
             MuAcquirePushLockShared(&Peer->Handshake.Lock);
             RtlCopyMemory(IoctlPeer->PublicKey, Peer->Handshake.RemoteStatic, NOISE_PUBLIC_KEY_LEN);
-            RtlCopyMemory(IoctlPeer->PresharedKey, Peer->Handshake.PresharedKey, NOISE_SYMMETRIC_KEY_LEN);
-            IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_PUBLIC_KEY | WG_IOCTL_PEER_HAS_PRESHARED_KEY;
+            IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_PUBLIC_KEY;
+            if (!CryptoIsZero32(Peer->Handshake.PresharedKey))
+            {
+                RtlCopyMemory(IoctlPeer->PresharedKey, Peer->Handshake.PresharedKey, NOISE_SYMMETRIC_KEY_LEN);
+                IoctlPeer->Flags |= WG_IOCTL_PEER_HAS_PRESHARED_KEY;
+            }
             MuReleasePushLockShared(&Peer->Handshake.Lock);
             KIRQL Irql;
             Irql = ExAcquireSpinLockShared(&Peer->EndpointLock);
