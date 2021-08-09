@@ -264,15 +264,9 @@ PtrRingInit(_Inout_ PTR_RING *Ring, _In_ LONG Size)
 }
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
-_When_(Destroy != 0, _Requires_lock_not_held_(Ring->ConsumerLock))
 static inline VOID
-PtrRingCleanup(_In_ PTR_RING *Ring, _In_opt_ VOID (*Destroy)(VOID *))
+PtrRingFree(_In_ PTR_RING *Ring)
 {
-    VOID *Ptr;
-
-    if (Destroy)
-        while ((Ptr = PtrRingConsume(Ring)) != NULL)
-            Destroy(Ptr);
     MemFree(Ring->Queue);
 }
 

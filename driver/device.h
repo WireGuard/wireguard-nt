@@ -71,9 +71,8 @@ typedef struct _WG_DEVICE
     DEVICE_OBJECT *FunctionalDeviceObject;
     NDIS_STATISTICS_INFO Statistics;
     EX_RUNDOWN_REF ItemsInFlight;
-    PTR_RING EncryptQueue, DecryptQueue;
+    PTR_RING EncryptQueue, DecryptQueue, HandshakeRxQueue;
     PEER_SERIAL TxQueue, RxQueue, HandshakeTxQueue;
-    NET_BUFFER_LIST_QUEUE HandshakeRxQueue;
     MULTICORE_WORKQUEUE EncryptThreads, DecryptThreads;
     MULTICORE_WORKQUEUE HandshakeTxThreads, HandshakeRxThreads;
     SOCKET __rcu *Sock4, *Sock6;
@@ -91,6 +90,7 @@ typedef struct _WG_DEVICE
     UINT16 IncomingPort;
     BOOLEAN IsUp, IsDeviceRemoving;
     ULONG Mtu4, Mtu6;
+    ULONG HandshakeRxQueueLen;
     LOG_RING Log;
     LIST_ENTRY DeviceList;
     KEVENT DeviceRemoved;

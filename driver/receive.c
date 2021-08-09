@@ -48,7 +48,7 @@ ReceiveHandshakePacket(_Inout_ WG_DEVICE *Wg, _In_ NET_BUFFER_LIST *Nbl)
         return;
     }
 
-    UnderLoad = NetBufferListQueueLength(&Wg->HandshakeRxQueue) >= MAX_QUEUED_INCOMING_HANDSHAKES / 8;
+    UnderLoad = ReadULongNoFence(&Wg->HandshakeRxQueueLen) >= MAX_QUEUED_INCOMING_HANDSHAKES / 8;
     if (UnderLoad)
     {
         LastUnderLoad = KeQueryInterruptTime();
@@ -149,10 +149,11 @@ PacketHandshakeRxWorker(MULTICORE_WORKQUEUE *WorkQueue)
     WG_DEVICE *Wg = CONTAINING_RECORD(WorkQueue, WG_DEVICE, HandshakeRxThreads);
     NET_BUFFER_LIST *Nbl;
 
-    while ((Nbl = NetBufferListInterlockedDequeue(&Wg->HandshakeRxQueue)) != NULL)
+    while ((Nbl = PtrRingConsume(&Wg->HandshakeRxQueue)) != NULL)
     {
         ReceiveHandshakePacket(Wg, Nbl);
         FreeReceiveNetBufferList(Nbl);
+        InterlockedDecrement((LONG *)&Wg->HandshakeRxQueueLen);
     }
 }
 
@@ -577,12 +578,12 @@ PacketReceive(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_INITIATION):
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_RESPONSE):
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_COOKIE): {
-            if (NetBufferListQueueLength(&Wg->HandshakeRxQueue) > MAX_QUEUED_INCOMING_HANDSHAKES)
+            if (!NT_SUCCESS(PtrRingProduce(&Wg->HandshakeRxQueue, Nbl)))
             {
                 LogInfoNblRatelimited(Wg, "Dropping handshake packet from %s", Nbl);
                 goto cleanup;
             }
-            NetBufferListInterlockedEnqueue(&Wg->HandshakeRxQueue, Nbl);
+            InterlockedIncrement((LONG *)&Wg->HandshakeRxQueueLen);
             MulticoreWorkQueueBump(&Wg->HandshakeRxThreads);
             break;
         }
@@ -625,6 +626,7 @@ VOID
 FreeIncomingHandshakes(WG_DEVICE *Wg)
 {
     NET_BUFFER_LIST *Nbl;
-    while ((Nbl = NetBufferListInterlockedDequeue(&Wg->HandshakeRxQueue)) != NULL)
+    while ((Nbl = PtrRingConsume(&Wg->HandshakeRxQueue)) != NULL)
         FreeReceiveNetBufferList(Nbl);
+    WriteULongNoFence(&Wg->HandshakeRxQueueLen, 0);
 }

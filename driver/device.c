@@ -390,11 +390,12 @@ HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
     MulticoreWorkQueueDestroy(&Wg->EncryptThreads);
     MulticoreWorkQueueDestroy(&Wg->HandshakeRxThreads);
     MulticoreWorkQueueDestroy(&Wg->HandshakeTxThreads);
-    PtrRingCleanup(&Wg->DecryptQueue, NULL);
-    PtrRingCleanup(&Wg->EncryptQueue, NULL);
+    PtrRingFree(&Wg->DecryptQueue);
+    PtrRingFree(&Wg->EncryptQueue);
     RcuBarrier();
     NoiseStaticIdentityClear(&Wg->StaticIdentity);
     FreeIncomingHandshakes(Wg);
+    PtrRingFree(&Wg->HandshakeRxQueue);
     MemFree(Wg->IndexHashtable);
     MemFree(Wg->PeerHashtable);
     MuReleasePushLockExclusive(&Wg->DeviceUpdateLock);
@@ -577,7 +578,6 @@ InitializeEx(
     PeerSerialInit(&Wg->TxQueue);
     PeerSerialInit(&Wg->RxQueue);
     PeerSerialInit(&Wg->HandshakeTxQueue);
-    NetBufferListInitQueue(&Wg->HandshakeRxQueue);
     AllowedIpsInit(&Wg->PeerAllowedIps);
     CookieCheckerInit(&Wg->CookieChecker, Wg);
     InitializeListHead(&Wg->PeerList);
@@ -614,9 +614,13 @@ InitializeEx(
     if (!NT_SUCCESS(Status))
         goto cleanupEncryptQueue;
 
-    Status = MulticoreWorkQueueInit(&Wg->EncryptThreads, PacketEncryptWorker);
+    Status = PtrRingInit(&Wg->HandshakeRxQueue, MAX_QUEUED_INCOMING_HANDSHAKES);
     if (!NT_SUCCESS(Status))
         goto cleanupDecryptQueue;
+
+    Status = MulticoreWorkQueueInit(&Wg->EncryptThreads, PacketEncryptWorker);
+    if (!NT_SUCCESS(Status))
+        goto cleanupHandshakeRxQueue;
 
     Status = MulticoreWorkQueueInit(&Wg->DecryptThreads, PacketDecryptWorker);
     if (!NT_SUCCESS(Status))
@@ -651,10 +655,12 @@ cleanupDecryptThreads:
     MulticoreWorkQueueDestroy(&Wg->DecryptThreads);
 cleanupEncryptThreads:
     MulticoreWorkQueueDestroy(&Wg->EncryptThreads);
+cleanupHandshakeRxQueue:
+    PtrRingFree(&Wg->HandshakeRxQueue);
 cleanupDecryptQueue:
-    PtrRingCleanup(&Wg->DecryptQueue, NULL);
+    PtrRingFree(&Wg->DecryptQueue);
 cleanupEncryptQueue:
-    PtrRingCleanup(&Wg->EncryptQueue, NULL);
+    PtrRingFree(&Wg->EncryptQueue);
 cleanupIndexHashtable:
     MemFree(Wg->IndexHashtable);
 cleanupPeerHashtable:
