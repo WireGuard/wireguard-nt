@@ -78,7 +78,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <WireGuardVersionMaj>0</WireGuardVersionMaj>
-    <WireGuardVersionMin>3</WireGuardVersionMin>
+    <WireGuardVersionMin>4</WireGuardVersionMin>
     <WireGuardVersionRel>0</WireGuardVersionRel>
 
     <!-- Used for versioning, must be n.n[.n[.n]]. -->
