@@ -129,7 +129,7 @@ MINIPORT_RETURN_NET_BUFFER_LISTS ReturnNetBufferLists;
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static inline VOID
-FreeReceiveNetBufferList(_In_ NET_BUFFER_LIST *First)
+FreeReceiveNetBufferList(_In_opt_ NET_BUFFER_LIST *First)
 {
     if (First)
         ReturnNetBufferLists(First->SourceHandle, First, 0);
