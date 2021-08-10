@@ -17,11 +17,7 @@ typedef struct _ENDPOINT
     SOCKADDR_INET Addr;
     struct
     {
-        union
-        {
-            WSACMSGHDR Cmsg;
-            UCHAR __Alignment[WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR))];
-        };
+        WSACMSGHDR Cmsg;
         union
         {
             IN_PKTINFO Src4;

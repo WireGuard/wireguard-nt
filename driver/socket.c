@@ -483,6 +483,25 @@ cleanupCtx:
     return Status;
 }
 
+static_assert(
+    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(RTL_FIELD_SIZE(ENDPOINT, Src4))) == WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src4)),
+    "cmsg calculation mismatch");
+static_assert(
+    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(RTL_FIELD_SIZE(ENDPOINT, Src6))) == WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src6)),
+    "cmsg calculation mismatch");
+static_assert(
+    WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR)) + FIELD_OFFSET(ENDPOINT, Cmsg) == FIELD_OFFSET(ENDPOINT, Src4),
+    "cmsg calculation mismatch");
+static_assert(
+    WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR)) + FIELD_OFFSET(ENDPOINT, Cmsg) == FIELD_OFFSET(ENDPOINT, Src6),
+    "cmsg calculation mismatch");
+static_assert(
+    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src4)) <= sizeof(ENDPOINT),
+    "cmsg calculation mismatch");
+static_assert(
+    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src6)) <= sizeof(ENDPOINT),
+    "cmsg calculation mismatch");
+
 _Post_maybenull_
 static VOID *
 FindInCmsgHdr(_In_ WSK_DATAGRAM_INDICATION *Data, _In_ CONST INT Level, _In_ CONST INT Type)
