@@ -555,6 +555,7 @@ InitializeEx(
     Wg->InterfaceIndex = MiniportInitParameters->IfIndex;
     Wg->InterfaceLuid = MiniportInitParameters->NetLuid;
     LogRingInit(&Wg->Log);
+    KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
 
     NdisMGetDeviceProperty(MiniportAdapterHandle, NULL, &Wg->FunctionalDeviceObject, NULL, NULL, NULL);
     if (!Wg->FunctionalDeviceObject)
@@ -638,7 +639,6 @@ InitializeEx(
     if (!NT_SUCCESS(Status))
         goto cleanupHandshakeRxThreads;
 
-    KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
     MuAcquirePushLockExclusive(&DeviceListLock);
     InsertHeadList(&DeviceList, &Wg->DeviceList);
     MuReleasePushLockExclusive(&DeviceListLock);
