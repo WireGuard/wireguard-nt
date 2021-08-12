@@ -782,22 +782,19 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
         Status = SetSockOpt(Sock, IPPROTO_UDP, UDP_NOCHECKSUM, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
             goto cleanupIrp;
+        Status = SetSockOpt(Sock, IPPROTO_IP, IP_PKTINFO, &True, sizeof(True));
+        if (!NT_SUCCESS(Status))
+            goto cleanupIrp;
     }
     else if (Sa->sa_family == AF_INET6)
     {
         Status = SetSockOpt(Sock, IPPROTO_IPV6, IPV6_V6ONLY, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
             goto cleanupIrp;
+        Status = SetSockOpt(Sock, IPPROTO_IPV6, IPV6_PKTINFO, &True, sizeof(True));
+        if (!NT_SUCCESS(Status))
+            goto cleanupIrp;
     }
-
-    Status = SetSockOpt(
-        Sock,
-        Sa->sa_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP,
-        Sa->sa_family == AF_INET6 ? IPV6_PKTINFO : IP_PKTINFO,
-        &True,
-        sizeof(True));
-    if (!NT_SUCCESS(Status))
-        goto cleanupIrp;
 
     IoReuseIrp(Irp, STATUS_UNSUCCESSFUL);
     IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
