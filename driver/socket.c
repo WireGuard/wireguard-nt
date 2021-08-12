@@ -43,13 +43,15 @@ static_assert(
     sizeof(NET_BUFFER_MINIPORT_RESERVED((NET_BUFFER *)0)) >= sizeof(WSK_BUF_LIST),
     "WSK_BUF_LIST is too large for NB");
 
+typedef union _WSK_IRP
+{
+    IRP Irp;
+    UCHAR IrpBuffer[sizeof(IRP) + sizeof(IO_STACK_LOCATION)];
+} WSK_IRP;
+
 typedef struct _SOCKET_SEND_CTX
 {
-    union
-    {
-        IRP Irp;
-        UCHAR IrpBuffer[sizeof(IRP) + sizeof(IO_STACK_LOCATION)];
-    };
+    WSK_IRP;
     WG_DEVICE *Wg;
     union
     {
@@ -87,11 +89,7 @@ static BOOLEAN NoWskSendMessages;
 
 typedef struct _POLYFILLED_SOCKET_SEND_CTX
 {
-    union
-    {
-        IRP Irp;
-        UCHAR IrpBuffer[sizeof(IRP) + sizeof(IO_STACK_LOCATION)];
-    };
+    WSK_IRP;
     IRP *OriginalIrp;
     LONG *RefCount;
 } POLYFILLED_SOCKET_SEND_CTX;
@@ -690,22 +688,16 @@ CloseSocket(_Frees_ptr_opt_ SOCKET *Socket)
     if (!Socket)
         return;
     ExWaitForRundownProtectionRelease(&Socket->ItemsInFlight);
-    if (Socket->Sock)
-    {
-        KEVENT Done;
-        KeInitializeEvent(&Done, SynchronizationEvent, FALSE);
-        IRP *Irp = IoAllocateIrp(1, FALSE);
-        if (!Irp)
-            goto freeIt;
-        IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
-        NTSTATUS Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskCloseSocket(Socket->Sock, Irp);
-        if (Status == STATUS_PENDING)
-        {
-            KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
-            Status = Irp->IoStatus.Status;
-        }
-        IoFreeIrp(Irp);
-    }
+    if (!Socket->Sock)
+        goto freeIt;
+    KEVENT Done;
+    WSK_IRP I;
+    KeInitializeEvent(&Done, SynchronizationEvent, FALSE);
+    IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
+    IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
+    NTSTATUS Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskCloseSocket(Socket->Sock, &I.Irp);
+    if (Status == STATUS_PENDING)
+        KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
 freeIt:
     MemFree(Socket);
 }
@@ -720,19 +712,17 @@ SetSockOpt(
     _In_ ULONG Len)
 {
     KEVENT Done;
+    WSK_IRP I;
     KeInitializeEvent(&Done, SynchronizationEvent, FALSE);
-    IRP *Irp = IoAllocateIrp(1, FALSE);
-    if (!Irp)
-        return STATUS_INSUFFICIENT_RESOURCES;
-    IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
+    IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
+    IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     NTSTATUS Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)
-                          ->WskControlSocket(Sock, WskSetOption, Option, Level, Len, Input, 0, NULL, NULL, Irp);
+                          ->WskControlSocket(Sock, WskSetOption, Option, Level, Len, Input, 0, NULL, NULL, &I.Irp);
     if (Status == STATUS_PENDING)
     {
         KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
-        Status = Irp->IoStatus.Status;
+        Status = I.Irp.IoStatus.Status;
     }
-    IoFreeIrp(Irp);
     return Status;
 }
 
@@ -747,12 +737,11 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
     Socket->Device = Wg;
     Socket->Sock = NULL;
     ExInitializeRundownProtection(&Socket->ItemsInFlight);
-    IRP *Irp = IoAllocateIrp(1, FALSE);
-    if (!Irp)
-        goto cleanupSocket;
     KEVENT Done;
+    WSK_IRP I;
     KeInitializeEvent(&Done, SynchronizationEvent, FALSE);
-    IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
+    IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
+    IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     static CONST WSK_CLIENT_DATAGRAM_DISPATCH WskClientDatagramDispatch = { .WskReceiveFromEvent = Receive };
     Status = WskProviderNpi.Dispatch->WskSocket(
         WskProviderNpi.Client,
@@ -765,70 +754,67 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
         Wg->SocketOwnerProcess,
         NULL,
         NULL,
-        Irp);
+        &I.Irp);
     if (Status == STATUS_PENDING)
     {
         KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
-        Status = Irp->IoStatus.Status;
+        Status = I.Irp.IoStatus.Status;
     }
     if (!NT_SUCCESS(Status))
-        goto cleanupIrp;
-    WSK_SOCKET *Sock = (WSK_SOCKET *)Irp->IoStatus.Information;
+        goto cleanupSocket;
+    WSK_SOCKET *Sock = (WSK_SOCKET *)I.Irp.IoStatus.Information;
     WritePointerNoFence(&Socket->Sock, Sock);
-    ULONG True = TRUE;
 
+    ULONG True = TRUE;
     if (Sa->sa_family == AF_INET)
     {
         Status = SetSockOpt(Sock, IPPROTO_UDP, UDP_NOCHECKSUM, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
-            goto cleanupIrp;
+            goto cleanupSocket;
         Status = SetSockOpt(Sock, IPPROTO_IP, IP_PKTINFO, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
-            goto cleanupIrp;
+            goto cleanupSocket;
     }
     else if (Sa->sa_family == AF_INET6)
     {
         Status = SetSockOpt(Sock, IPPROTO_IPV6, IPV6_V6ONLY, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
-            goto cleanupIrp;
+            goto cleanupSocket;
         Status = SetSockOpt(Sock, IPPROTO_IPV6, IPV6_PKTINFO, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
-            goto cleanupIrp;
+            goto cleanupSocket;
     }
 
-    IoReuseIrp(Irp, STATUS_UNSUCCESSFUL);
-    IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
-    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskBind(Sock, Sa, 0, Irp);
+    IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
+    IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
+    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskBind(Sock, Sa, 0, &I.Irp);
     if (Status == STATUS_PENDING)
     {
         KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
-        Status = Irp->IoStatus.Status;
+        Status = I.Irp.IoStatus.Status;
     }
     if (!NT_SUCCESS(Status))
     {
         CHAR Address[SOCKADDR_STR_MAX_LEN];
         SockaddrToString(Address, (SOCKADDR_INET *)Sa);
         LogErr(Wg, "Could not bind socket to %s (%#x)", Address, Status);
-        goto cleanupIrp;
+        goto cleanupSocket;
     }
 
-    IoReuseIrp(Irp, STATUS_UNSUCCESSFUL);
-    IoSetCompletionRoutine(Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
-    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskGetLocalAddress(Sock, Sa, Irp);
+    IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
+    IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
+    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskGetLocalAddress(Sock, Sa, &I.Irp);
     if (Status == STATUS_PENDING)
     {
         KeWaitForSingleObject(&Done, Executive, KernelMode, FALSE, NULL);
-        Status = Irp->IoStatus.Status;
+        Status = I.Irp.IoStatus.Status;
     }
     if (!NT_SUCCESS(Status))
-        goto cleanupIrp;
+        goto cleanupSocket;
 
-    IoFreeIrp(Irp);
     *RetSocket = Socket;
     return STATUS_SUCCESS;
 
-cleanupIrp:
-    IoFreeIrp(Irp);
 cleanupSocket:
     CloseSocket(Socket);
     return Status;
