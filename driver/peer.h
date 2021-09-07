@@ -23,6 +23,7 @@ typedef struct _ENDPOINT
             IN_PKTINFO Src4;
             IN6_PKTINFO Src6;
         };
+        UCHAR CmsgHackBuf[WSA_CMSGHDR_ALIGN(sizeof(WSACMSGHDR))];
     };
     UINT32 RoutingGeneration;
     UINT32 UpdateGeneration;
