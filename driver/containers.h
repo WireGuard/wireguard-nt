@@ -173,6 +173,26 @@ PtrRingProduce(_Inout_ PTR_RING *Ring, _In_ __drv_aliasesMem VOID *Ptr)
     return Ret;
 }
 
+_IRQL_requires_max_(DISPATCH_LEVEL)
+_Requires_lock_not_held_(Ring->ProducerLock)
+_Must_inspect_result_
+static inline NTSTATUS
+PtrRingTryProduce(_Inout_ PTR_RING *Ring, _In_ __drv_aliasesMem VOID *Ptr)
+{
+    NTSTATUS Ret;
+    KIRQL Irql = KeRaiseIrqlToDpcLevel();
+
+    if (!KeTryToAcquireSpinLockAtDpcLevel(&Ring->ProducerLock))
+    {
+        KeLowerIrql(Irql);
+        return STATUS_LOCK_NOT_GRANTED;
+    }
+    Ret = __PtrRingProduce(Ring, Ptr);
+    KeReleaseSpinLock(&Ring->ProducerLock, Irql);
+
+    return Ret;
+}
+
 _Requires_lock_held_(Ring->ConsumerLock)
 _Must_inspect_result_
 _Post_maybenull_

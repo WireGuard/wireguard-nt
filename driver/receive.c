@@ -578,7 +578,10 @@ PacketReceive(WG_DEVICE *Wg, NET_BUFFER_LIST *First)
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_INITIATION):
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_RESPONSE):
         case CpuToLe32(MESSAGE_TYPE_HANDSHAKE_COOKIE): {
-            if (!NT_SUCCESS(PtrRingProduce(&Wg->HandshakeRxQueue, Nbl)))
+            NTSTATUS Ret = ReadULongNoFence(&Wg->HandshakeRxQueueLen) >= MAX_QUEUED_INCOMING_HANDSHAKES / 2
+                               ? PtrRingTryProduce(&Wg->HandshakeRxQueue, Nbl)
+                               : PtrRingProduce(&Wg->HandshakeRxQueue, Nbl);
+            if (!NT_SUCCESS(Ret))
             {
                 LogInfoNblRatelimited(Wg, "Dropping handshake packet from %s", Nbl);
                 goto cleanup;
