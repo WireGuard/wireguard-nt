@@ -20,10 +20,17 @@ typedef struct _ENDPOINT
         WSACMSGHDR Cmsg;
         union
         {
-            IN_PKTINFO Src4;
-            IN6_PKTINFO Src6;
+            struct
+            {
+                IN_PKTINFO Src4;
+                WSACMSGHDR CmsgHack4;
+            };
+            struct
+            {
+                IN6_PKTINFO Src6;
+                WSACMSGHDR CmsgHack6;
+            };
         };
-        UCHAR CmsgHackBuf[WSA_CMSGHDR_ALIGN(sizeof(WSACMSGHDR))];
     };
     UINT32 RoutingGeneration;
     UINT32 UpdateGeneration;

@@ -37,7 +37,7 @@ static BOOLEAN WskHasIpv4Transport, WskHasIpv6Transport;
 static NTSTATUS WskInitStatus = STATUS_RETRY;
 static EX_PUSH_LOCK WskIsIniting;
 static LOOKASIDE_ALIGN LOOKASIDE_LIST_EX SocketSendCtxCache;
-static ULONG CmsgHackAdditionalLength = WSA_CMSG_LEN(0);
+static ULONG CmsgHackAdditionalLength = WSA_CMSG_SPACE(0);
 
 #define NET_BUFFER_WSK_BUF(Nb) ((WSK_BUF_LIST *)&NET_BUFFER_MINIPORT_RESERVED(Nb)[0])
 static_assert(
@@ -255,14 +255,11 @@ retryWhileHoldingSharedLock:
         Peer->Endpoint.Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src4));
         Peer->Endpoint.Cmsg.cmsg_level = IPPROTO_IP;
         Peer->Endpoint.Cmsg.cmsg_type = IP_PKTINFO;
-        WSACMSGHDR *CmsgHack =
-            (WSACMSGHDR
-                 *)((UCHAR *)&Peer->Endpoint.Cmsg + WSA_CMSGHDR_ALIGN(WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src4))));
-        CmsgHack->cmsg_len = WSA_CMSG_LEN(0);
-        CmsgHack->cmsg_level = IPPROTO_IP;
-        CmsgHack->cmsg_type = IP_WFP_REDIRECT_RECORDS;
         Peer->Endpoint.Src4.ipi_addr = SrcAddr.Ipv4.sin_addr;
         Peer->Endpoint.Src4.ipi_ifindex = BestIndex;
+        Peer->Endpoint.CmsgHack4.cmsg_len = WSA_CMSG_LEN(0);
+        Peer->Endpoint.CmsgHack4.cmsg_level = IPPROTO_IP;
+        Peer->Endpoint.CmsgHack4.cmsg_type = IP_WFP_REDIRECT_RECORDS;
         Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
     }
     else if (Peer->Endpoint.Addr.si_family == AF_INET6)
@@ -270,14 +267,11 @@ retryWhileHoldingSharedLock:
         Peer->Endpoint.Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src6));
         Peer->Endpoint.Cmsg.cmsg_level = IPPROTO_IPV6;
         Peer->Endpoint.Cmsg.cmsg_type = IPV6_PKTINFO;
-        WSACMSGHDR *CmsgHack =
-            (WSACMSGHDR
-                 *)((UCHAR *)&Peer->Endpoint.Cmsg + WSA_CMSGHDR_ALIGN(WSA_CMSG_LEN(sizeof(Peer->Endpoint.Src6))));
-        CmsgHack->cmsg_len = WSA_CMSG_LEN(0);
-        CmsgHack->cmsg_level = IPPROTO_IPV6;
-        CmsgHack->cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
         Peer->Endpoint.Src6.ipi6_addr = SrcAddr.Ipv6.sin6_addr;
         Peer->Endpoint.Src6.ipi6_ifindex = BestIndex;
+        Peer->Endpoint.CmsgHack6.cmsg_len = WSA_CMSG_LEN(0);
+        Peer->Endpoint.CmsgHack6.cmsg_level = IPPROTO_IPV6;
+        Peer->Endpoint.CmsgHack6.cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
         Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
     }
     ++Peer->Endpoint.UpdateGeneration, ++UpdateGeneration;
@@ -512,6 +506,7 @@ static_assert(
 static_assert(
     FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src6)) <= sizeof(ENDPOINT),
     "cmsg calculation mismatch");
+static_assert(WSA_CMSG_SPACE(0) == sizeof(WSACMSGHDR), "cmsg calculation mismatch");
 
 _Post_maybenull_
 static VOID *
@@ -544,12 +539,10 @@ SocketEndpointFromNbl(ENDPOINT *Endpoint, CONST NET_BUFFER_LIST *Nbl)
         Endpoint->Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src4));
         Endpoint->Cmsg.cmsg_level = IPPROTO_IP;
         Endpoint->Cmsg.cmsg_type = IP_PKTINFO;
-        WSACMSGHDR *CmsgHack =
-            (WSACMSGHDR *)((UCHAR *)&Endpoint->Cmsg + WSA_CMSGHDR_ALIGN(WSA_CMSG_LEN(sizeof(Endpoint->Src4))));
-        CmsgHack->cmsg_len = WSA_CMSG_LEN(0);
-        CmsgHack->cmsg_level = IPPROTO_IP;
-        CmsgHack->cmsg_type = IP_WFP_REDIRECT_RECORDS;
         Endpoint->Src4 = *(IN_PKTINFO *)Pktinfo;
+        Endpoint->CmsgHack4.cmsg_len = WSA_CMSG_LEN(0);
+        Endpoint->CmsgHack4.cmsg_level = IPPROTO_IP;
+        Endpoint->CmsgHack4.cmsg_type = IP_WFP_REDIRECT_RECORDS;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
     }
     else if (Addr->sa_family == AF_INET6 && (Pktinfo = FindInCmsgHdr(Data, IPPROTO_IPV6, IPV6_PKTINFO)) != NULL)
@@ -558,12 +551,10 @@ SocketEndpointFromNbl(ENDPOINT *Endpoint, CONST NET_BUFFER_LIST *Nbl)
         Endpoint->Cmsg.cmsg_len = WSA_CMSG_LEN(sizeof(Endpoint->Src6));
         Endpoint->Cmsg.cmsg_level = IPPROTO_IPV6;
         Endpoint->Cmsg.cmsg_type = IPV6_PKTINFO;
-        WSACMSGHDR *CmsgHack =
-            (WSACMSGHDR *)((UCHAR *)&Endpoint->Cmsg + WSA_CMSGHDR_ALIGN(WSA_CMSG_LEN(sizeof(Endpoint->Src6))));
-        CmsgHack->cmsg_len = WSA_CMSG_LEN(0);
-        CmsgHack->cmsg_level = IPPROTO_IPV6;
-        CmsgHack->cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
         Endpoint->Src6 = *(IN6_PKTINFO *)Pktinfo;
+        Endpoint->CmsgHack6.cmsg_len = WSA_CMSG_LEN(0);
+        Endpoint->CmsgHack6.cmsg_level = IPPROTO_IPV6;
+        Endpoint->CmsgHack6.cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
     }
     else
@@ -614,6 +605,7 @@ SocketSetPeerEndpoint(WG_PEER *Peer, CONST ENDPOINT *Endpoint)
         {
             Peer->Endpoint.Cmsg = Endpoint->Cmsg;
             Peer->Endpoint.Src4 = Endpoint->Src4;
+            Peer->Endpoint.CmsgHack4 = Endpoint->CmsgHack4;
         }
     }
     else if (Endpoint->Addr.si_family == AF_INET6)
@@ -623,6 +615,7 @@ SocketSetPeerEndpoint(WG_PEER *Peer, CONST ENDPOINT *Endpoint)
         {
             Peer->Endpoint.Cmsg = Endpoint->Cmsg;
             Peer->Endpoint.Src6 = Endpoint->Src6;
+            Peer->Endpoint.CmsgHack6 = Endpoint->CmsgHack6;
         }
     }
     else
