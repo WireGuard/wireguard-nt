@@ -296,7 +296,23 @@ IpInterfaceChangeNotification(
         }
     }
     else if (NotificationType == MibParameterNotification)
+    {
         *Mtu = Row->NlMtu;
+
+        static BOOLEAN HaveNotified;
+        if (!HaveNotified)
+        {
+            HaveNotified = TRUE;
+            RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
+            RtlGetVersion(&OsVersionInfo);
+            LogInfo(
+                Wg,
+                "MTU notifier working as expected on %u.%u.%u; please notify team@wireguard.com",
+                OsVersionInfo.dwMajorVersion,
+                OsVersionInfo.dwMinorVersion,
+                OsVersionInfo.dwBuildNumber);
+        }
+    }
 cleanupDeviceListLock:
     MuReleasePushLockShared(&DeviceListLock);
 }
