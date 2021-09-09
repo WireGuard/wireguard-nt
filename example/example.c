@@ -344,6 +344,7 @@ int __cdecl main(void)
     InitializeUnicastIpAddressEntry(&AddressRow);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
+    AddressRow.DadState = IpDadStatePreferred;
     Bytes = sizeof(Config.DemoServer.PublicKey);
     if (strcmp(ServerResponse, "OK") || InetPtonA(AF_INET, Colon3 + 1, &AddressRow.Address.Ipv4.sin_addr) != 1 ||
         !CryptStringToBinaryA(Colon1 + 1, 0, CRYPT_STRING_BASE64, Config.DemoServer.PublicKey, &Bytes, NULL, NULL))
@@ -392,12 +393,6 @@ int __cdecl main(void)
     Log(WIREGUARD_LOG_INFO, L"WireGuardNT v%u.%u loaded", (Version >> 16) & 0xff, (Version >> 0) & 0xff);
 
     WireGuardGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
-    LastError = CreateUnicastIpAddressEntry(&AddressRow);
-    if (LastError != ERROR_SUCCESS && LastError != ERROR_OBJECT_ALREADY_EXISTS)
-    {
-        LogError(L"Failed to set IP address", LastError);
-        goto cleanupAdapter;
-    }
     MIB_IPFORWARD_ROW2 DefaultRoute = { 0 };
     InitializeIpForwardEntry(&DefaultRoute);
     DefaultRoute.InterfaceLuid = AddressRow.InterfaceLuid;
@@ -408,6 +403,12 @@ int __cdecl main(void)
     if (LastError != ERROR_SUCCESS && LastError != ERROR_OBJECT_ALREADY_EXISTS)
     {
         LogError(L"Failed to set default route", LastError);
+        goto cleanupAdapter;
+    }
+    LastError = CreateUnicastIpAddressEntry(&AddressRow);
+    if (LastError != ERROR_SUCCESS && LastError != ERROR_OBJECT_ALREADY_EXISTS)
+    {
+        LogError(L"Failed to set IP address", LastError);
         goto cleanupAdapter;
     }
     MIB_IPINTERFACE_ROW IpInterface = { 0 };
