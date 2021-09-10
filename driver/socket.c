@@ -37,7 +37,6 @@ static BOOLEAN WskHasIpv4Transport, WskHasIpv6Transport;
 static NTSTATUS WskInitStatus = STATUS_RETRY;
 static EX_PUSH_LOCK WskIsIniting;
 static LOOKASIDE_ALIGN LOOKASIDE_LIST_EX SocketSendCtxCache;
-static ULONG CmsgHackAdditionalLength = WSA_CMSG_SPACE(0);
 
 #define NET_BUFFER_WSK_BUF(Nb) ((WSK_BUF_LIST *)&NET_BUFFER_MINIPORT_RESERVED(Nb)[0])
 static_assert(
@@ -259,7 +258,7 @@ retryWhileHoldingSharedLock:
         Peer->Endpoint.Src4.ipi_ifindex = BestIndex;
         Peer->Endpoint.CmsgHack4.cmsg_len = WSA_CMSG_LEN(0);
         Peer->Endpoint.CmsgHack4.cmsg_level = IPPROTO_IP;
-        Peer->Endpoint.CmsgHack4.cmsg_type = IP_WFP_REDIRECT_RECORDS;
+        Peer->Endpoint.CmsgHack4.cmsg_type = IP_OPTIONS;
         Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
     }
     else if (Peer->Endpoint.Addr.si_family == AF_INET6)
@@ -271,7 +270,7 @@ retryWhileHoldingSharedLock:
         Peer->Endpoint.Src6.ipi6_ifindex = BestIndex;
         Peer->Endpoint.CmsgHack6.cmsg_len = WSA_CMSG_LEN(0);
         Peer->Endpoint.CmsgHack6.cmsg_level = IPPROTO_IPV6;
-        Peer->Endpoint.CmsgHack6.cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
+        Peer->Endpoint.CmsgHack6.cmsg_type = IPV6_RTHDR;
         Peer->Endpoint.RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
     }
     ++Peer->Endpoint.UpdateGeneration, ++UpdateGeneration;
@@ -346,7 +345,7 @@ SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepaliv
         FirstWskBuf,
         0,
         (PSOCKADDR)&Peer->Endpoint.Addr,
-        (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len) + CmsgHackAdditionalLength,
+        (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len) + WSA_CMSG_SPACE(0),
         &Peer->Endpoint.Cmsg,
         &Ctx->Irp);
     RcuReadUnlockFromDpcLevel();
@@ -412,7 +411,7 @@ SocketSendBufferToPeer(WG_PEER *Peer, CONST VOID *Buffer, ULONG Len)
                      &Ctx->Buffer,
                      0,
                      (PSOCKADDR)&Peer->Endpoint.Addr,
-                     (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len) + CmsgHackAdditionalLength,
+                     (ULONG)WSA_CMSGDATA_ALIGN(Peer->Endpoint.Cmsg.cmsg_len) + WSA_CMSG_SPACE(0),
                      &Peer->Endpoint.Cmsg,
                      &Ctx->Irp);
     RcuReadUnlockFromDpcLevel();
@@ -473,7 +472,7 @@ SocketSendBufferAsReplyToNbl(WG_DEVICE *Wg, CONST NET_BUFFER_LIST *InNbl, CONST 
                      &Ctx->Buffer,
                      0,
                      (PSOCKADDR)&Endpoint.Addr,
-                     (ULONG)WSA_CMSGDATA_ALIGN(Endpoint.Cmsg.cmsg_len) + CmsgHackAdditionalLength,
+                     (ULONG)WSA_CMSGDATA_ALIGN(Endpoint.Cmsg.cmsg_len) + WSA_CMSG_SPACE(0),
                      &Endpoint.Cmsg,
                      &Ctx->Irp);
     RcuReadUnlock(Irql);
@@ -542,7 +541,7 @@ SocketEndpointFromNbl(ENDPOINT *Endpoint, CONST NET_BUFFER_LIST *Nbl)
         Endpoint->Src4 = *(IN_PKTINFO *)Pktinfo;
         Endpoint->CmsgHack4.cmsg_len = WSA_CMSG_LEN(0);
         Endpoint->CmsgHack4.cmsg_level = IPPROTO_IP;
-        Endpoint->CmsgHack4.cmsg_type = IP_WFP_REDIRECT_RECORDS;
+        Endpoint->CmsgHack4.cmsg_type = IP_OPTIONS;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV4);
     }
     else if (Addr->sa_family == AF_INET6 && (Pktinfo = FindInCmsgHdr(Data, IPPROTO_IPV6, IPV6_PKTINFO)) != NULL)
@@ -554,7 +553,7 @@ SocketEndpointFromNbl(ENDPOINT *Endpoint, CONST NET_BUFFER_LIST *Nbl)
         Endpoint->Src6 = *(IN6_PKTINFO *)Pktinfo;
         Endpoint->CmsgHack6.cmsg_len = WSA_CMSG_LEN(0);
         Endpoint->CmsgHack6.cmsg_level = IPPROTO_IPV6;
-        Endpoint->CmsgHack6.cmsg_type = IPV6_WFP_REDIRECT_RECORDS;
+        Endpoint->CmsgHack6.cmsg_type = IPV6_RTHDR;
         Endpoint->RoutingGeneration = ReadNoFence(&RoutingGenerationV6);
     }
     else
@@ -920,12 +919,9 @@ WskInit(VOID)
 
 #if NTDDI_VERSION == NTDDI_WIN7
     RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
-    if (NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
-        (OsVersionInfo.dwMajorVersion < 6 || (OsVersionInfo.dwMajorVersion == 6 && OsVersionInfo.dwMinorVersion < 2)))
-    {
-        NoWskSendMessages = TRUE;
-        CmsgHackAdditionalLength = 0;
-    }
+    NoWskSendMessages =
+        NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
+        (OsVersionInfo.dwMajorVersion < 6 || (OsVersionInfo.dwMajorVersion == 6 && OsVersionInfo.dwMinorVersion < 2));
 #endif
 
     Status = ExInitializeLookasideListEx(
