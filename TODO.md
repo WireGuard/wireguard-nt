@@ -2,7 +2,12 @@
 
 ## Driver
 
-### Performance
+### Implement ECN support via the `IP_ECN` cmsg
+
+### Rework IOCTL to accept requests over 4gigs
+- The current `ULONG` is too small
+- We should switch to using `METHOD_NEITHER`
+- One param is a pointer to a ULONG64 length, the other the actual buffer
 
 ### Rearrange and regroup `WG_DEVICE`
 - Most commonly used members should be at the top
@@ -15,23 +20,22 @@
 - For the MuAcquireReleaseSharedExclusive functions, make SAL detect lock
   imbalance. e.g. a AcquireExclusive followed by a ReleaseShared.
 
+## Bugs with no solution
+
+### Forwarding/WeakHostSend breaks `IP_PKTINFO`
+When forwarding or weakhostsend are enabled -- which can happen via Hotspot
+mode -- the routing logic ignores `IP_PKTINFO`. This seems like a bug, but one
+unlikely to be fixed. We'll need a opt-in `setsockopt` to make `IP_PKTINFO`
+choose the right behavior in this case.
+
+## Bug workarounds
+
 ### Remove `_NO_CRT_STDIO_INLINE` once WDK is fixed
 
-### Make SDV work with full settings
-
-### Automate CodeQL
-Reference: https://docs.microsoft.com/sl-si/windows-hardware/drivers/devtest/static-tools-and-codeql
-- Download CodeQL and unzip => .deps
-- git clone --recurse https://github.com/microsoft/Windows-Driver-Developer-Supplemental-Tools.git => .deps
-- rd /s codeqldb
-- codeql.cmd database create -l=cpp -s=driver -c "msbuild driver.vcxproj /t:Rebuild" codeqldb -j 0
-- codeql.cmd database analyze codeqldb windows_driver_recommended.qls --search-path=..\Windows-Driver-Developer-Supplemental-Tools --format=sarifv2.1.0 --output=driver\wireguard.sarif -j 0
-
-### WHQL
-
 ### Remove MTU polling
-- When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
-  check for the workaround thread polling.
+When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
+check for the workaround thread polling.
 
-#### DVL and Static Tools Logo Test
-- Recent (E)WDK DVL always includes CodeQL test results. Even if "NORUN". WHQL 1809 does not support CodeQL test results in DVL and fails Static Tools Logo Test. Those two are in conflict. Either downgrade (E)WDK, or upgrade WHQL rig.
+### Remove `IP_OPTIONS`/`IPV6_RTHDR` hack
+Currently we tag on an empty options cmsg to work around a bug in recent
+Windows builds, where `IP_PKTINFO` gets stripped if it's passed alone.

@@ -7,10 +7,6 @@ WireGuardNT is an implementation of WireGuard, for the NT Kernel as used in Wind
 
 **If you've come here looking to run [WireGuard on Windows](https://git.zx2c4.com/wireguard-windows/about/), you're in the wrong place. Instead, head on over to the [WireGuard Download Page](https://www.wireguard.com/install/) to download the WireGuard application.** Alternatively, if you've come here looking to embed WireGuard into your Windows program, **you are still in the wrong place**. Instead, head on over to the [embeddable DLL service project](https://git.zx2c4.com/wireguard-windows/about/embeddable-dll-service/README.md), to get everything you need to bake WireGuard into your Windows programs. These projects use (or will eventually use) WireGuardNT inside.
 
-#### Experimental, unfinished, work in progress
-
-This repository is under active development, is not yet complete, and is not *yet* properly optimized for high performance. Do not use it! In addition to the usual concerns about it *not yet being secure*, it's also not even *finished*. So if you do attempt to drive this off the lot, realize that a wheel or two are likely missing, in addition to, perhaps, the entire crankshaft, and the radio dials haven't yet been painted and the seatbelts are made of Fruit by the Foot.
-
 ## Usage
 
 #### Download
