@@ -991,6 +991,18 @@ WskInit(VOID)
     if (!NT_SUCCESS(Status))
         goto cleanupWskProviderNPI;
 
+    /* Ignore return value, as MSDN says eventually this will be removed. */
+    ULONG NoTdi = WSK_TDI_BEHAVIOR_BYPASS_TDI;
+    WskProviderNpi.Dispatch->WskControlClient(
+        WskProviderNpi.Client,
+        WSK_TDI_BEHAVIOR,
+        sizeof(NoTdi),
+        &NoTdi,
+        0,
+        NULL,
+        NULL,
+        NULL);
+
     Status = NotifyRouteChange2(AF_INET, RouteNotification, &RoutingGenerationV4, FALSE, &RouteNotifierV4);
     if (!NT_SUCCESS(Status))
         goto cleanupWskProviderNPI;
