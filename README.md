@@ -1,11 +1,11 @@
 # [WireGuard](https://www.wireguard.com/) for the NT Kernel
 ### High performance in-kernel WireGuard implementation for Windows
 
-WireGuardNT is an implementation of WireGuard, for the NT Kernel as used in Windows 7, 8, 8.1, and 10, supporting AMD64, x86, ARM64, and ARM processors.
+WireGuardNT is an implementation of WireGuard, for the NT Kernel as used in Windows 7, 8, 8.1, 10, and 11, supporting AMD64, x86, ARM64, and ARM processors.
 
 #### Not the droids you're looking for
 
-**If you've come here looking to run [WireGuard on Windows](https://git.zx2c4.com/wireguard-windows/about/), you're in the wrong place. Instead, head on over to the [WireGuard Download Page](https://www.wireguard.com/install/) to download the WireGuard application.** Alternatively, if you've come here looking to embed WireGuard into your Windows program, **you are still in the wrong place**. Instead, head on over to the [embeddable DLL service project](https://git.zx2c4.com/wireguard-windows/about/embeddable-dll-service/README.md), to get everything you need to bake WireGuard into your Windows programs. These projects use (or will eventually use) WireGuardNT inside.
+**If you've come here looking to run [WireGuard on Windows](https://git.zx2c4.com/wireguard-windows/about/), you're in the wrong place. Instead, head on over to the [WireGuard Download Page](https://www.wireguard.com/install/) to download the WireGuard application.** Alternatively, if you've come here looking to embed WireGuard into your Windows program, **you are still in the wrong place**. Instead, head on over to the [embeddable DLL service project](https://git.zx2c4.com/wireguard-windows/about/embeddable-dll-service/README.md), to get everything you need to bake WireGuard into your Windows programs. These projects use WireGuardNT inside.
 
 ## Usage
 
