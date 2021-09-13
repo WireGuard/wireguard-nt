@@ -28,6 +28,10 @@ mode -- the routing logic ignores `IP_PKTINFO`. This seems like a bug, but one
 unlikely to be fixed. We'll need a opt-in `setsockopt` to make `IP_PKTINFO`
 choose the right behavior in this case.
 
+### TDI drivers never do the right thing with `IP_PKTINFO`
+Windows only looks at Options/OptionsLength if UserBuffer==(PVOID)0x886103.
+This is crazy, so nobody actually does it.
+
 ## Bug workarounds
 
 ### Remove `_NO_CRT_STDIO_INLINE` once WDK is fixed
