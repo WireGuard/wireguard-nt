@@ -15,6 +15,21 @@
 extern "C" {
 #endif
 
+#ifndef ALIGNED
+#    if defined(_MSC_VER)
+#        define ALIGNED(n) __declspec(align(n))
+#    elif defined(__GNUC__)
+#        define ALIGNED(n) __attribute__((aligned(n)))
+#    else
+#        error "Unable to define ALIGNED"
+#    endif
+#endif
+
+/* MinGW is missing this one, unfortunately. */
+#ifndef _Post_maybenull_
+#    define _Post_maybenull_
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4324) /* structure was padded due to alignment specifier */
 
@@ -278,7 +293,7 @@ BOOL(WINAPI WIREGUARD_GET_ADAPTER_STATE_FUNC)
 #define WIREGUARD_KEY_LENGTH 32
 
 typedef struct _WIREGUARD_ALLOWED_IP WIREGUARD_ALLOWED_IP;
-__declspec(align(8)) struct _WIREGUARD_ALLOWED_IP
+struct ALIGNED(8) _WIREGUARD_ALLOWED_IP
 {
     union
     {
@@ -301,7 +316,7 @@ typedef enum
 } WIREGUARD_PEER_FLAG;
 
 typedef struct _WIREGUARD_PEER WIREGUARD_PEER;
-__declspec(align(8)) struct _WIREGUARD_PEER
+struct ALIGNED(8) _WIREGUARD_PEER
 {
     WIREGUARD_PEER_FLAG Flags;               /**< Bitwise combination of flags */
     DWORD Reserved;                          /**< Reserved; must be zero */
@@ -324,7 +339,7 @@ typedef enum
 } WIREGUARD_INTERFACE_FLAG;
 
 typedef struct _WIREGUARD_INTERFACE WIREGUARD_INTERFACE;
-__declspec(align(8)) struct _WIREGUARD_INTERFACE
+struct ALIGNED(8) _WIREGUARD_INTERFACE
 {
     WIREGUARD_INTERFACE_FLAG Flags;        /**< Bitwise combination of flags */
     WORD ListenPort;                       /**< Port for UDP listen socket, or 0 to choose randomly */

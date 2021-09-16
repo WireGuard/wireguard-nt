@@ -39,3 +39,7 @@ check for the workaround thread polling.
 ### Remove `IP_OPTIONS`/`IPV6_RTHDR` hack
 Currently we tag on an empty options cmsg to work around a bug in recent
 Windows builds, where `IP_PKTINFO` gets stripped if it's passed alone.
+
+## Project
+
+### Enable `/std:c17` once NDIS headers can handle it, and switch to using `alignas` from stdalign.h.
