@@ -17,7 +17,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>NDIS_MINIPORT_DRIVER=1;NDIS620_MINIPORT=1;NDIS683_MINIPORT=1;NDIS_WDM=1;POOL_ZERO_DOWN_LEVEL_SUPPORT;POOL_NX_OPTIN=1;_NO_CRT_STDIO_INLINE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDIS_MINIPORT_DRIVER=1;NDIS620_MINIPORT=1;NDIS683_MINIPORT=1;NDIS_WDM=1;POOL_ZERO_DOWN_LEVEL_SUPPORT;POOL_NX_OPTIN=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(SDVHacks)'=='true'">SDV_HACKS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <DisableSpecificWarnings>4100;4200;4201;$(DisableSpecificWarnings)</DisableSpecificWarnings>

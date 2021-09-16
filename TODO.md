@@ -30,8 +30,6 @@ choose the right behavior in this case.
 
 ## Bug workarounds
 
-### Remove `_NO_CRT_STDIO_INLINE` once WDK is fixed
-
 ### Remove MTU polling
 When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
 check for the workaround thread polling.
