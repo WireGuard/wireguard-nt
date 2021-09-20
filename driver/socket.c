@@ -23,10 +23,6 @@
 #include "logging.h"
 #include <wsk.h>
 #include <netioapi.h>
-/* The headers say that UDP_NOCHECKSUM is defined in ws2tcpip.h for hysterical raisins,
- * which we can't include from kernel space.
- */
-#define UDP_NOCHECKSUM 1
 
 static LONG RoutingGenerationV4 = 1, RoutingGenerationV6 = 1;
 static HANDLE RouteNotifierV4, RouteNotifierV6;
@@ -783,9 +779,6 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
     ULONG True = TRUE;
     if (Sa->sa_family == AF_INET)
     {
-        Status = SetSockOpt(Sock, IPPROTO_UDP, UDP_NOCHECKSUM, &True, sizeof(True));
-        if (!NT_SUCCESS(Status))
-            goto cleanupSocket;
         Status = SetSockOpt(Sock, IPPROTO_IP, IP_PKTINFO, &True, sizeof(True));
         if (!NT_SUCCESS(Status))
             goto cleanupSocket;
