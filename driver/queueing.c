@@ -115,47 +115,32 @@ MulticoreWorkQueueDestroy(MULTICORE_WORKQUEUE *WorkQueue)
     KeWaitForSingleObject(WorkQueue->WorkerSpawnerThread, Executive, KernelMode, FALSE, NULL);
     ObDereferenceObject(WorkQueue->WorkerSpawnerThread);
 
-    ULONG ThreadCount = 0;
-    for (MULTICORE_WORKTHREAD *Thread = WorkQueue->FirstThread; Thread; Thread = Thread->NextThread)
+    PKTHREAD Threads[MAXIMUM_WAIT_OBJECTS];
+    static_assert(sizeof(Threads) <= 512, "Must move thread handle allocation to heap");
+    PKWAIT_BLOCK WaitBlock = MemAllocateArray(MAXIMUM_WAIT_OBJECTS, sizeof(KWAIT_BLOCK));
+    ULONG MaxPerWait = WaitBlock ? MAXIMUM_WAIT_OBJECTS : THREAD_WAIT_OBJECTS;
+
+    MULTICORE_WORKTHREAD *Thread = WorkQueue->FirstThread, *Next;
+    while (Thread)
     {
+        ULONG Count = 0;
+        for (; Thread; Thread = Thread->NextThread)
+        {
+            if (Count >= MaxPerWait)
+                break;
+            if (Thread->Thread)
+                Threads[Count++] = Thread->Thread;
+        }
+        KeWaitForMultipleObjects(Count, Threads, WaitAll, Executive, KernelMode, FALSE, NULL, WaitBlock);
+    }
+    for (Thread = WorkQueue->FirstThread; Thread; Thread = Next)
+    {
+        Next = Thread->NextThread;
         if (Thread->Thread)
-            ++ThreadCount;
+            ObDereferenceObject(Thread->Thread);
+        MemFree(Thread);
     }
-    if (!ThreadCount)
-        return;
-    PKTHREAD *Threads = MemAllocateArray(ThreadCount, sizeof(*Threads) + sizeof(KWAIT_BLOCK));
-    if (Threads)
-    {
-        PKWAIT_BLOCK WaitBlock = (PKWAIT_BLOCK)((ULONG_PTR)Threads + (ThreadCount * sizeof(*Threads)));
-        ThreadCount = 0;
-        for (MULTICORE_WORKTHREAD *Thread = WorkQueue->FirstThread; Thread; Thread = Thread->NextThread)
-        {
-            if (Thread->Thread)
-                Threads[ThreadCount++] = Thread->Thread;
-        }
-        KeWaitForMultipleObjects(ThreadCount, Threads, WaitAll, Executive, KernelMode, FALSE, NULL, WaitBlock);
-        for (MULTICORE_WORKTHREAD *Thread = WorkQueue->FirstThread, *Next; Thread; Thread = Next)
-        {
-            Next = Thread->NextThread;
-            if (Thread->Thread)
-                ObDereferenceObject(Thread->Thread);
-            MemFree(Thread);
-        }
-        MemFree(Threads);
-    }
-    else
-    {
-        for (MULTICORE_WORKTHREAD *Thread = WorkQueue->FirstThread, *Next; Thread; Thread = Next)
-        {
-            Next = Thread->NextThread;
-            if (Thread->Thread)
-            {
-                KeWaitForSingleObject(Thread->Thread, Executive, KernelMode, FALSE, NULL);
-                ObDereferenceObject(Thread->Thread);
-            }
-            MemFree(Thread);
-        }
-    }
+    MemFree(WaitBlock);
 }
 
 #define NEXT(Nbl) NET_BUFFER_LIST_PER_PEER_LIST_LINK(Nbl)
