@@ -828,67 +828,6 @@ cleanupSocket:
     return Status;
 }
 
-_Use_decl_annotations_
-NTSTATUS
-SocketInit(WG_DEVICE *Wg, UINT16 Port)
-{
-    NTSTATUS Status;
-    SOCKADDR_IN Sa4 = { .sin_family = AF_INET, .sin_addr.s_addr = Htonl(INADDR_ANY), .sin_port = Htons(Port) };
-    SOCKADDR_IN6 Sa6 = { .sin6_family = AF_INET6, .sin6_addr = IN6ADDR_ANY_INIT };
-    SOCKET *New4 = NULL, *New6 = NULL;
-    LONG Retries = 0;
-
-retry:
-    if (WskHasIpv4Transport)
-    {
-        Status = CreateAndBindSocket(Wg, (SOCKADDR *)&Sa4, &New4);
-        if (!NT_SUCCESS(Status))
-            goto out;
-    }
-
-    if (WskHasIpv6Transport)
-    {
-        Sa6.sin6_port = Sa4.sin_port;
-        Status = CreateAndBindSocket(Wg, (SOCKADDR *)&Sa6, &New6);
-        if (!NT_SUCCESS(Status))
-        {
-            CloseSocket(New4);
-            New4 = NULL;
-            if (Status == STATUS_ADDRESS_ALREADY_EXISTS && !Port && Retries++ < 100)
-                goto retry;
-            goto out;
-        }
-    }
-
-    SocketReinit(
-        Wg,
-        New4,
-        New6,
-        WskHasIpv4Transport   ? Ntohs(Sa4.sin_port)
-        : WskHasIpv6Transport ? Ntohs(Sa6.sin6_port)
-                              : Port);
-    Status = STATUS_SUCCESS;
-out:
-    return Status;
-}
-
-_Use_decl_annotations_
-VOID
-SocketReinit(WG_DEVICE *Wg, SOCKET *New4, SOCKET *New6, UINT16 Port)
-{
-    MuAcquirePushLockExclusive(&Wg->SocketUpdateLock);
-    SOCKET *Old4 = RcuDereferenceProtected(SOCKET, Wg->Sock4, &Wg->SocketUpdateLock);
-    SOCKET *Old6 = RcuDereferenceProtected(SOCKET, Wg->Sock6, &Wg->SocketUpdateLock);
-    RcuAssignPointer(Wg->Sock4, New4);
-    RcuAssignPointer(Wg->Sock6, New6);
-    if (New4 || New6)
-        Wg->IncomingPort = Port;
-    MuReleasePushLockExclusive(&Wg->SocketUpdateLock);
-    RcuSynchronize();
-    CloseSocket(Old4);
-    CloseSocket(Old6);
-}
-
 static VOID
 RouteNotification(
     _In_ VOID *CallerContext,
@@ -898,9 +837,8 @@ RouteNotification(
     InterlockedAdd((LONG *)CallerContext, 2);
 }
 
-_Use_decl_annotations_
-NTSTATUS
-WskInit(VOID)
+_IRQL_requires_max_(PASSIVE_LEVEL)
+static NTSTATUS WskInit(VOID)
 {
     NTSTATUS Status = ReadNoFence(&WskInitStatus);
     if (Status != STATUS_RETRY)
@@ -987,14 +925,7 @@ WskInit(VOID)
     /* Ignore return value, as MSDN says eventually this will be removed. */
     ULONG NoTdi = WSK_TDI_BEHAVIOR_BYPASS_TDI;
     WskProviderNpi.Dispatch->WskControlClient(
-        WskProviderNpi.Client,
-        WSK_TDI_BEHAVIOR,
-        sizeof(NoTdi),
-        &NoTdi,
-        0,
-        NULL,
-        NULL,
-        NULL);
+        WskProviderNpi.Client, WSK_TDI_BEHAVIOR, sizeof(NoTdi), &NoTdi, 0, NULL, NULL, NULL);
 
     Status = NotifyRouteChange2(AF_INET, RouteNotification, &RoutingGenerationV4, FALSE, &RouteNotifierV4);
     if (!NT_SUCCESS(Status))
@@ -1034,4 +965,69 @@ VOID WskUnload(VOID)
     ExDeleteLookasideListEx(&SocketSendCtxCache);
 out:
     MuReleasePushLockExclusive(&WskIsIniting);
+}
+
+_Use_decl_annotations_
+NTSTATUS
+SocketInit(WG_DEVICE *Wg, UINT16 Port)
+{
+    NTSTATUS Status;
+    SOCKADDR_IN Sa4 = { .sin_family = AF_INET, .sin_addr.s_addr = Htonl(INADDR_ANY), .sin_port = Htons(Port) };
+    SOCKADDR_IN6 Sa6 = { .sin6_family = AF_INET6, .sin6_addr = IN6ADDR_ANY_INIT };
+    SOCKET *New4 = NULL, *New6 = NULL;
+    LONG Retries = 0;
+
+    Status = WskInit();
+    if (!NT_SUCCESS(Status))
+        goto out;
+
+retry:
+    if (WskHasIpv4Transport)
+    {
+        Status = CreateAndBindSocket(Wg, (SOCKADDR *)&Sa4, &New4);
+        if (!NT_SUCCESS(Status))
+            goto out;
+    }
+
+    if (WskHasIpv6Transport)
+    {
+        Sa6.sin6_port = Sa4.sin_port;
+        Status = CreateAndBindSocket(Wg, (SOCKADDR *)&Sa6, &New6);
+        if (!NT_SUCCESS(Status))
+        {
+            CloseSocket(New4);
+            New4 = NULL;
+            if (Status == STATUS_ADDRESS_ALREADY_EXISTS && !Port && Retries++ < 100)
+                goto retry;
+            goto out;
+        }
+    }
+
+    SocketReinit(
+        Wg,
+        New4,
+        New6,
+        WskHasIpv4Transport   ? Ntohs(Sa4.sin_port)
+        : WskHasIpv6Transport ? Ntohs(Sa6.sin6_port)
+                              : Port);
+    Status = STATUS_SUCCESS;
+out:
+    return Status;
+}
+
+_Use_decl_annotations_
+VOID
+SocketReinit(WG_DEVICE *Wg, SOCKET *New4, SOCKET *New6, UINT16 Port)
+{
+    MuAcquirePushLockExclusive(&Wg->SocketUpdateLock);
+    SOCKET *Old4 = RcuDereferenceProtected(SOCKET, Wg->Sock4, &Wg->SocketUpdateLock);
+    SOCKET *Old6 = RcuDereferenceProtected(SOCKET, Wg->Sock6, &Wg->SocketUpdateLock);
+    RcuAssignPointer(Wg->Sock4, New4);
+    RcuAssignPointer(Wg->Sock6, New6);
+    if (New4 || New6)
+        Wg->IncomingPort = Port;
+    MuReleasePushLockExclusive(&Wg->SocketUpdateLock);
+    RcuSynchronize();
+    CloseSocket(Old4);
+    CloseSocket(Old6);
 }

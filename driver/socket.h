@@ -60,8 +60,4 @@ SocketReinit(
     _In_ UINT16 Port);
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
-NTSTATUS
-WskInit(VOID);
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
 VOID WskUnload(VOID);

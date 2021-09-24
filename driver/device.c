@@ -544,10 +544,7 @@ InitializeEx(
     NDIS_HANDLE MiniportDriverContext,
     PNDIS_MINIPORT_INIT_PARAMETERS MiniportInitParameters)
 {
-    NTSTATUS Status = WskInit();
-    if (!NT_SUCCESS(Status))
-        return Status;
-
+    NTSTATUS Status;
     WG_DEVICE *Wg = MemAllocateAndZero(sizeof(*Wg));
     if (!Wg)
         return NDIS_STATUS_RESOURCES;
