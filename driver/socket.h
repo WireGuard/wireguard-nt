@@ -45,7 +45,7 @@ _Requires_lock_not_held_(Peer->EndpointLock)
 VOID
 SocketClearPeerEndpointSrc(_Inout_ WG_PEER *Peer);
 
-_IRQL_requires_max_(APC_LEVEL)
+_IRQL_requires_max_(PASSIVE_LEVEL)
 _Requires_lock_not_held_(Wg->SocketUpdateLock)
 NTSTATUS
 SocketInit(_Inout_ WG_DEVICE *Wg, _In_ UINT16 Port);

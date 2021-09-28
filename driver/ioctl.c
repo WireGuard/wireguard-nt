@@ -198,7 +198,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     Irp->IoStatus.Information = (ULONG_PTR)FinalSize;
 }
 
-_IRQL_requires_max_(APC_LEVEL)
+_IRQL_requires_max_(PASSIVE_LEVEL)
 _Requires_lock_held_(Wg->DeviceUpdateLock)
 _Must_inspect_result_
 static NTSTATUS
