@@ -141,7 +141,9 @@ MemGetValidatedNetBufferData(_In_ CONST NET_BUFFER *Nb)
     /* We intentionally neglect to add NET_BUFFER_CURRENT_MDL_OFFSET(Nb) here, as this really
      * only applies to NBs that we create ourselves.
      */
-    return (UCHAR *)MmGetMdlVirtualAddress(NET_BUFFER_CURRENT_MDL(Nb));
+    VOID *Addr = MmGetMdlVirtualAddress(NET_BUFFER_CURRENT_MDL(Nb));
+    _Analysis_assume_(Addr != NULL);
+    return Addr;
 }
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
