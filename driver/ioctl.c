@@ -630,16 +630,12 @@ ForceCloseHandlesAfterDelay(PVOID StartContext)
     if (!NT_SUCCESS(Status) || !HandleTable)
         goto cleanup;
 
-    HANDLE CurrentProcessId = PsGetCurrentProcessId();
     for (ULONG_PTR Index = 0; Index < HandleTable->NumberOfHandles; ++Index)
     {
         FILE_OBJECT *FileObject = HandleTable->Handles[Index].Object;
         if (!FileObject || FileObject->Type != 5 || FileObject->DeviceObject != DeviceObject)
             continue;
-        HANDLE ProcessId = HandleTable->Handles[Index].UniqueProcessId;
-        if (ProcessId == CurrentProcessId)
-            continue;
-        Status = PsLookupProcessByProcessId(ProcessId, &Process);
+        Status = PsLookupProcessByProcessId(HandleTable->Handles[Index].UniqueProcessId, &Process);
         if (!NT_SUCCESS(Status))
             continue;
         KeStackAttachProcess(Process, &ApcState);
