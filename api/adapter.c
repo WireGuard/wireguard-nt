@@ -1513,6 +1513,52 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BO
         goto cleanupNetDevRegKey;
     }
 
+    for (int Tries = 0; Tries < 1000; ++Tries)
+    {
+        DEVPROPTYPE PropertyType = 0;
+        NTSTATUS NtStatus = 0;
+        INT32 ProblemCode = 0;
+
+        if (!SetupDiGetDevicePropertyW(
+                Adapter->DevInfo,
+                &Adapter->DevInfoData,
+                &DEVPKEY_Device_ProblemStatus,
+                &PropertyType,
+                (PBYTE)&NtStatus,
+                sizeof(NtStatus),
+                NULL,
+                0) ||
+            PropertyType != DEVPROP_TYPE_NTSTATUS)
+            NtStatus = 0;
+        if (!SetupDiGetDevicePropertyW(
+                Adapter->DevInfo,
+                &Adapter->DevInfoData,
+                &DEVPKEY_Device_ProblemCode,
+                &PropertyType,
+                (PBYTE)&ProblemCode,
+                sizeof(ProblemCode),
+                NULL,
+                0) ||
+            (PropertyType != DEVPROP_TYPE_INT32 && PropertyType != DEVPROP_TYPE_UINT32))
+            ProblemCode = 0;
+        if (NtStatus == STATUS_PNP_DEVICE_CONFIGURATION_PENDING && Tries < 999)
+        {
+            Sleep(10);
+            continue;
+        }
+        if (NT_SUCCESS(NtStatus) && !ProblemCode)
+            break;
+        LastError = RtlNtStatusToDosError(NtStatus);
+        if (LastError == ERROR_SUCCESS)
+            LastError = ERROR_NOT_READY;
+        LOG_ERROR(
+            LastError,
+            L"Failed to setup adapter (problem code: 0x%x, ntstatus: 0x%x)",
+            ProblemCode,
+            NtStatus);
+        goto cleanupNetDevRegKey;
+    }
+
     /* DIF_INSTALLDEVICE returns almost immediately, while the device installation continues in the background. It might
      * take a while, before all registry keys and values are populated. */
     LPWSTR DummyStr = RegistryQueryStringWait(NetDevRegKey, L"NetCfgInstanceId", WAIT_FOR_REGISTRY_TIMEOUT);
@@ -1552,46 +1598,6 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BO
         goto cleanupNetDevRegKey;
     }
 
-    for (int Tries = 0; Tries < 1000; ++Tries)
-    {
-        DEVPROPTYPE PropertyType;
-        NTSTATUS ProblemStatus;
-        if (SetupDiGetDevicePropertyW(
-                Adapter->DevInfo,
-                &Adapter->DevInfoData,
-                &DEVPKEY_Device_ProblemStatus,
-                &PropertyType,
-                (PBYTE)&ProblemStatus,
-                sizeof(ProblemStatus),
-                NULL,
-                0) &&
-            PropertyType == DEVPROP_TYPE_NTSTATUS)
-        {
-            if (ProblemStatus != STATUS_PNP_DEVICE_CONFIGURATION_PENDING || Tries == 999)
-            {
-                INT32 ProblemCode;
-                if (!SetupDiGetDevicePropertyW(
-                        Adapter->DevInfo,
-                        &Adapter->DevInfoData,
-                        &DEVPKEY_Device_ProblemCode,
-                        &PropertyType,
-                        (PBYTE)&ProblemCode,
-                        sizeof(ProblemCode),
-                        NULL,
-                        0) ||
-                    PropertyType != DEVPROP_TYPE_INT32)
-                    ProblemCode = 0;
-                LastError = RtlNtStatusToDosError(ProblemStatus);
-                if (LastError == ERROR_SUCCESS)
-                    LastError = ERROR_NOT_READY;
-                LOG_ERROR(LastError, L"Failed to setup adapter (code: 0x%x, status: 0x%x)", ProblemCode, ProblemStatus);
-                goto cleanupTcpipAdapterRegKey;
-            }
-            Sleep(10);
-        }
-        else
-            break;
-    }
     if (!EnsureDeviceObject(Adapter->DevInstanceID))
     {
         LastError = LOG_LAST_ERROR(L"Device object file did not appear");
