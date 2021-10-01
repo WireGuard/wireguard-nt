@@ -56,8 +56,6 @@ typedef struct _WIREGUARD_ADAPTER *WIREGUARD_ADAPTER_HANDLE;
  *                      created for each new adapter. It is called "requested" GUID because the API it uses is
  *                      completely undocumented, and so there could be minor interesting complications with its usage.
  *
- * @param RebootRequired  Optional pointer to a boolean flag to be set to TRUE in case SetupAPI suggests a reboot.
- *
  * @return If the function succeeds, the return value is the adapter handle. Must be released with WireGuardFreeAdapter.
  * If the function fails, the return value is NULL. To get extended error information, call GetLastError.
  */
@@ -65,7 +63,7 @@ typedef _Must_inspect_result_
 _Return_type_success_(return != NULL)
 _Post_maybenull_
 WIREGUARD_ADAPTER_HANDLE(WINAPI WIREGUARD_CREATE_ADAPTER_FUNC)
-(_In_z_ LPCWSTR Pool, _In_z_ LPCWSTR Name, _In_opt_ const GUID *RequestedGUID, _Out_opt_ BOOL *RebootRequired);
+(_In_z_ LPCWSTR Pool, _In_z_ LPCWSTR Name, _In_opt_ const GUID *RequestedGUID);
 
 /**
  * Opens an existing WireGuard adapter.
@@ -89,14 +87,12 @@ WIREGUARD_ADAPTER_HANDLE(WINAPI WIREGUARD_OPEN_ADAPTER_FUNC)(_In_z_ LPCWSTR Pool
  *
  * @param Adapter         Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter.
  *
- * @param RebootRequired  Optional pointer to a boolean flag to be set to TRUE in case SetupAPI suggests a reboot.
- *
  * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
  *         get extended error information, call GetLastError.
  */
 typedef _Return_type_success_(return != FALSE)
 BOOL(WINAPI WIREGUARD_DELETE_ADAPTER_FUNC)
-(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _Out_opt_ BOOL *RebootRequired);
+(_In_ WIREGUARD_ADAPTER_HANDLE Adapter);
 
 /**
  * Called by WireGuardEnumAdapters for each adapter in the pool.
@@ -139,13 +135,11 @@ typedef VOID(WINAPI WIREGUARD_FREE_ADAPTER_FUNC)(_In_opt_ WIREGUARD_ADAPTER_HAND
  *
  * @param Pool            Name of the adapter pool. Zero-terminated string of up to WIREGUARD_MAX_POOL-1 characters.
  *
- * @param RebootRequired  Optional pointer to a boolean flag to be set to TRUE in case SetupAPI suggests a reboot.
- *
  * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
  *         get extended error information, call GetLastError.
  */
 typedef _Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_DELETE_POOL_DRIVER_FUNC)(_In_z_ LPCWSTR Pool, _Out_opt_ BOOL *RebootRequired);
+BOOL(WINAPI WIREGUARD_DELETE_POOL_DRIVER_FUNC)(_In_z_ LPCWSTR Pool);
 
 /**
  * Returns the LUID of the adapter.

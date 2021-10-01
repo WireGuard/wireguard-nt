@@ -14,13 +14,12 @@ WIREGUARD_ADAPTER *
 CreateAdapterViaRundll32(
     _In_z_ LPCWSTR Pool,
     _In_z_ LPCWSTR Name,
-    _In_opt_ const GUID *RequestedGUID,
-    _Inout_ BOOL *RebootRequired);
+    _In_opt_ const GUID *RequestedGUID);
 
 _Return_type_success_(return != FALSE)
 BOOL
-DeleteAdapterViaRundll32(_In_ const WIREGUARD_ADAPTER *Adapter, _Inout_ BOOL *RebootRequired);
+DeleteAdapterViaRundll32(_In_ const WIREGUARD_ADAPTER *Adapter);
 
 _Return_type_success_(return != FALSE)
 BOOL
-DeletePoolDriverViaRundll32(_In_z_ LPCWSTR Pool, _Inout_ BOOL *RebootRequired);
+DeletePoolDriverViaRundll32(_In_z_ LPCWSTR Pool);

@@ -371,14 +371,14 @@ int __cdecl main(void)
 
     GUID ExampleGuid = { 0xdeadc001, 0xbeef, 0xbabe, { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef } };
     WIREGUARD_ADAPTER_HANDLE Adapter = WireGuardOpenAdapter(L"Example", L"Demo");
-    if (Adapter && !WireGuardDeleteAdapter(Adapter, NULL))
+    if (Adapter && !WireGuardDeleteAdapter(Adapter))
     {
         LastError = GetLastError();
         LogError(L"Failed to delete already existing adapter", LastError);
         goto cleanupQuit;
     }
     WireGuardFreeAdapter(Adapter);
-    Adapter = WireGuardCreateAdapter(L"Example", L"Demo", &ExampleGuid, NULL);
+    Adapter = WireGuardCreateAdapter(L"Example", L"Demo", &ExampleGuid);
     if (!Adapter)
     {
         LastError = GetLastError();
@@ -466,7 +466,7 @@ int __cdecl main(void)
     } while (WaitForSingleObject(QuitEvent, 1000) == WAIT_TIMEOUT);
 
 cleanupAdapter:
-    WireGuardDeleteAdapter(Adapter, NULL);
+    WireGuardDeleteAdapter(Adapter);
     WireGuardFreeAdapter(Adapter);
 cleanupQuit:
     SetConsoleCtrlHandler(CtrlHandler, FALSE);

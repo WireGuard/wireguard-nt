@@ -82,12 +82,11 @@ VOID __stdcall CreateAdapter(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int 
     if (Argc > 4 && FAILED(CLSIDFromString(Argv[4], &RequestedGUID)))
         goto cleanup;
 
-    BOOL RebootRequired;
     WIREGUARD_ADAPTER *Adapter =
-        WireGuardCreateAdapter(Argv[2], Argv[3], Argc > 4 ? &RequestedGUID : NULL, &RebootRequired);
+        WireGuardCreateAdapter(Argv[2], Argv[3], Argc > 4 ? &RequestedGUID : NULL);
     DWORD LastError = Adapter ? ERROR_SUCCESS : GetLastError();
     WriteFormatted(
-        STD_OUTPUT_HANDLE, L"%1!X! %2!s! %3!X!", LastError, Adapter ? Adapter->DevInstanceID : L"\"\"", RebootRequired);
+        STD_OUTPUT_HANDLE, L"%1!X! %2!s!", LastError, Adapter ? Adapter->DevInstanceID : L"\"\"");
     if (Adapter)
         WireGuardFreeAdapter(Adapter);
 
@@ -107,17 +106,16 @@ VOID __stdcall DeleteAdapter(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int 
         goto cleanup;
 
     DWORD LastError;
-    BOOL RebootRequired = FALSE;
     WIREGUARD_ADAPTER *Adapter = AdapterOpenFromDevInstanceId(Argv[2], Argv[3]);
     if (!Adapter)
     {
         LastError = GetLastError();
         goto write;
     }
-    LastError = WireGuardDeleteAdapter(Adapter, &RebootRequired) ? ERROR_SUCCESS : GetLastError();
+    LastError = WireGuardDeleteAdapter(Adapter) ? ERROR_SUCCESS : GetLastError();
     WireGuardFreeAdapter(Adapter);
 write:
-    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X! %2!X!", LastError, RebootRequired);
+    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X!", LastError);
 
 cleanup:
     LocalFree(Argv);
@@ -134,9 +132,8 @@ VOID __stdcall DeletePoolDriver(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, i
     if (Argc < 2)
         goto cleanup;
 
-    BOOL RebootRequired;
-    DWORD LastError = WireGuardDeletePoolDriver(Argv[2], &RebootRequired) ? ERROR_SUCCESS : GetLastError();
-    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X! %2!X!", LastError, RebootRequired);
+    DWORD LastError = WireGuardDeletePoolDriver(Argv[2]) ? ERROR_SUCCESS : GetLastError();
+    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X!", LastError);
 
 cleanup:
     LocalFree(Argv);
@@ -435,7 +432,7 @@ cleanupDirectory:
 
 _Use_decl_annotations_
 WIREGUARD_ADAPTER *
-CreateAdapterViaRundll32(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BOOL *RebootRequired)
+CreateAdapterViaRundll32(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
 {
     LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
     LPWSTR Arguments = NULL;
@@ -464,7 +461,7 @@ CreateAdapterViaRundll32(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, 
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 3)
+    if (Argc < 2)
     {
         LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
         LastError = ERROR_INVALID_PARAMETER;
@@ -476,8 +473,6 @@ CreateAdapterViaRundll32(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, 
         LOG(WIREGUARD_LOG_ERR, L"Failed to get adapter %s", Argv[1]);
         LastError = ERROR_FILE_NOT_FOUND;
     }
-    if (wcstoul(Argv[2], NULL, 16))
-        *RebootRequired = TRUE;
 cleanupArgv:
     LocalFree(Argv);
 cleanupArguments:
@@ -488,7 +483,7 @@ cleanupArguments:
 
 _Use_decl_annotations_
 BOOL
-DeleteAdapterViaRundll32(const WIREGUARD_ADAPTER *Adapter, BOOL *RebootRequired)
+DeleteAdapterViaRundll32(const WIREGUARD_ADAPTER *Adapter)
 {
     LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
     LPWSTR Arguments = ArgvToCommandLineW(2, Adapter->Pool, Adapter->DevInstanceID);
@@ -508,15 +503,13 @@ DeleteAdapterViaRundll32(const WIREGUARD_ADAPTER *Adapter, BOOL *RebootRequired)
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 2)
+    if (Argc < 1)
     {
         LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
         LastError = ERROR_INVALID_PARAMETER;
         goto cleanupArgv;
     }
     LastError = wcstoul(Argv[0], NULL, 16);
-    if (wcstoul(Argv[1], NULL, 16))
-        *RebootRequired = TRUE;
 cleanupArgv:
     LocalFree(Argv);
 cleanupArguments:
@@ -526,7 +519,7 @@ cleanupArguments:
 
 _Use_decl_annotations_
 BOOL
-DeletePoolDriverViaRundll32(LPCWSTR Pool, BOOL *RebootRequired)
+DeletePoolDriverViaRundll32(LPCWSTR Pool)
 {
     LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
     LPWSTR Arguments = ArgvToCommandLineW(1, Pool);
@@ -546,15 +539,13 @@ DeletePoolDriverViaRundll32(LPCWSTR Pool, BOOL *RebootRequired)
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 2)
+    if (Argc < 1)
     {
         LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
         LastError = ERROR_INVALID_PARAMETER;
         goto cleanupArgv;
     }
     LastError = wcstoul(Argv[0], NULL, 16);
-    if (wcstoul(Argv[1], NULL, 16))
-        *RebootRequired = TRUE;
 cleanupArgv:
     LocalFree(Argv);
 cleanupArguments:

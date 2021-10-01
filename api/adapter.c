@@ -1341,16 +1341,11 @@ cleanup:
 
 _Use_decl_annotations_
 WIREGUARD_ADAPTER_HANDLE WINAPI
-WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BOOL *RebootRequired)
+WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
 {
-    BOOL DummyRebootRequired;
-    if (!RebootRequired)
-        RebootRequired = &DummyRebootRequired;
-    *RebootRequired = FALSE;
-
 #ifdef MAYBE_WOW64
     if (NativeMachine != IMAGE_FILE_PROCESS)
-        return CreateAdapterViaRundll32(Pool, Name, RequestedGUID, RebootRequired);
+        return CreateAdapterViaRundll32(Pool, Name, RequestedGUID);
 #endif
 
     DWORD LastError = ERROR_SUCCESS;
@@ -1487,7 +1482,11 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BO
         LastError = LOG_LAST_ERROR(L"Failed to install adapter %u device", Adapter->DevInfoData.DevInst);
         goto cleanupNetDevRegKey;
     }
-    *RebootRequired = *RebootRequired || CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData);
+    if (CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData))
+    {
+        LastError = ERROR_PNP_REBOOT_REQUIRED;
+        goto cleanupNetDevRegKey;
+    }
 
     if (!SetupDiSetDevicePropertyW(
             Adapter->DevInfo,
@@ -1617,9 +1616,8 @@ cleanupDevice:
                 Adapter->DevInfo,
                 &Adapter->DevInfoData,
                 &RemoveDeviceParams.ClassInstallHeader,
-                sizeof(RemoveDeviceParams)) &&
-            SetupDiCallClassInstaller(DIF_REMOVE, Adapter->DevInfo, &Adapter->DevInfoData))
-            *RebootRequired = *RebootRequired || CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData);
+                sizeof(RemoveDeviceParams)))
+            SetupDiCallClassInstaller(DIF_REMOVE, Adapter->DevInfo, &Adapter->DevInfoData);
     }
     NamespaceReleaseMutex(Mutex);
 cleanupDriverInfoList:
@@ -1633,17 +1631,13 @@ cleanupAdapter:
 
 _Use_decl_annotations_
 BOOL WINAPI
-WireGuardDeleteAdapter(WIREGUARD_ADAPTER *Adapter, BOOL *RebootRequired)
+WireGuardDeleteAdapter(WIREGUARD_ADAPTER *Adapter)
 {
     WireGuardSetAdapterLogging(Adapter, WIREGUARD_ADAPTER_LOG_OFF);
 
-    BOOL DummyRebootRequired;
-    if (!RebootRequired)
-        RebootRequired = &DummyRebootRequired;
-    *RebootRequired = FALSE;
 #ifdef MAYBE_WOW64
     if (NativeMachine != IMAGE_FILE_PROCESS)
-        return DeleteAdapterViaRundll32(Adapter, RebootRequired);
+        return DeleteAdapterViaRundll32(Adapter);
 #endif
 
     DWORD LastError = ERROR_SUCCESS;
@@ -1678,7 +1672,8 @@ WireGuardDeleteAdapter(WIREGUARD_ADAPTER *Adapter, BOOL *RebootRequired)
         GetLastError() != ERROR_NO_SUCH_DEVINST)
         LastError = LOG_LAST_ERROR(L"Failed to remove adapter %u", Adapter->DevInfoData.DevInst);
 
-    *RebootRequired = *RebootRequired || CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData);
+    if (CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData))
+        LastError = LastError == ERROR_SUCCESS ? ERROR_SUCCESS_REBOOT_REQUIRED : ERROR_FAIL_REBOOT_REQUIRED;
 
 cleanupMutex:
     NamespaceReleaseMutex(Mutex);
@@ -1737,23 +1732,19 @@ cleanupMutex:
 
 _Use_decl_annotations_
 BOOL WINAPI
-WireGuardDeletePoolDriver(LPCWSTR Pool, BOOL *RebootRequired)
+WireGuardDeletePoolDriver(LPCWSTR Pool)
 {
-    BOOL DummyRebootRequired;
-    if (!RebootRequired)
-        RebootRequired = &DummyRebootRequired;
-    *RebootRequired = FALSE;
-
     DWORD LastError = ERROR_SUCCESS;
 #ifdef MAYBE_WOW64
     if (NativeMachine != IMAGE_FILE_PROCESS)
     {
-        LastError = DeletePoolDriverViaRundll32(Pool, RebootRequired) ? ERROR_SUCCESS : GetLastError();
+        LastError = DeletePoolDriverViaRundll32(Pool) ? ERROR_SUCCESS : GetLastError();
         goto cleanup;
     }
 #endif
 
-    if (!DeleteAllOurAdapters(Pool, RebootRequired))
+    BOOL RebootRequired = FALSE;
+    if (!DeleteAllOurAdapters(Pool, &RebootRequired))
     {
         LastError = GetLastError();
         goto cleanup;
@@ -1800,6 +1791,8 @@ WireGuardDeletePoolDriver(LPCWSTR Pool, BOOL *RebootRequired)
         }
         Free(DriverDetail);
     }
+    if (RebootRequired)
+        LastError = LastError == ERROR_SUCCESS ? ERROR_SUCCESS_REBOOT_REQUIRED : ERROR_FAIL_REBOOT_REQUIRED;
     SetupDiDestroyDriverInfoList(DeviceInfoSet, NULL, SPDIT_CLASSDRIVER);
 cleanupDeviceInfoSet:
     SetupDiDestroyDeviceInfoList(DeviceInfoSet);
