@@ -925,67 +925,6 @@ IsNewer(
     return FALSE;
 }
 
-_Must_inspect_result_
-static _Return_type_success_(return != FALSE)
-BOOL
-GetTcpipAdapterRegPath(_In_ const WIREGUARD_ADAPTER *Adapter, _Out_writes_z_(MAX_REG_PATH) LPWSTR Path)
-{
-    WCHAR Guid[MAX_GUID_STRING_LEN];
-    if (_snwprintf_s(
-            Path,
-            MAX_REG_PATH,
-            _TRUNCATE,
-            L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Adapters\\%.*s",
-            StringFromGUID2(&Adapter->CfgInstanceID, Guid, _countof(Guid)),
-            Guid) == -1)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Registry path too long");
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return FALSE;
-    }
-    return TRUE;
-}
-
-_Must_inspect_result_
-static _Return_type_success_(return != FALSE)
-BOOL
-GetTcpipInterfaceRegPath(_In_ const WIREGUARD_ADAPTER *Adapter, _Out_writes_z_(MAX_REG_PATH) LPWSTR Path)
-{
-    HKEY TcpipAdapterRegKey;
-    WCHAR TcpipAdapterRegPath[MAX_REG_PATH];
-    if (!GetTcpipAdapterRegPath(Adapter, TcpipAdapterRegPath))
-        return FALSE;
-    DWORD LastError = RegOpenKeyExW(HKEY_LOCAL_MACHINE, TcpipAdapterRegPath, 0, KEY_QUERY_VALUE, &TcpipAdapterRegKey);
-    if (LastError != ERROR_SUCCESS)
-    {
-        SetLastError(LOG_ERROR(LastError, L"Failed to open registry key %s", TcpipAdapterRegPath));
-        return FALSE;
-    }
-    LPWSTR Paths = RegistryQueryString(TcpipAdapterRegKey, L"IpConfig", TRUE);
-    if (!Paths)
-    {
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get %s\\IpConfig", TcpipAdapterRegPath);
-        goto cleanupTcpipAdapterRegKey;
-    }
-    if (!Paths[0])
-    {
-        LOG(WIREGUARD_LOG_ERR, L"%s\\IpConfig is empty", TcpipAdapterRegPath);
-        LastError = ERROR_INVALID_DATA;
-        goto cleanupPaths;
-    }
-    if (_snwprintf_s(Path, MAX_REG_PATH, _TRUNCATE, L"SYSTEM\\CurrentControlSet\\Services\\%s", Paths) == -1)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Registry path too long: %s", Paths);
-        LastError = ERROR_INVALID_PARAMETER;
-        goto cleanupPaths;
-    }
-cleanupPaths:
-    Free(Paths);
-cleanupTcpipAdapterRegKey:
-    RegCloseKey(TcpipAdapterRegKey);
-    return RET_ERROR(TRUE, LastError);
-}
-
 static _Return_type_success_(return != 0)
 DWORD
 VersionOfFile(_In_z_ LPCWSTR Filename)
@@ -1607,73 +1546,10 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BO
         goto cleanupNetDevRegKey;
     }
 
-    HKEY TcpipAdapterRegKey;
-    WCHAR TcpipAdapterRegPath[MAX_REG_PATH];
-    if (!GetTcpipAdapterRegPath(Adapter, TcpipAdapterRegPath))
-    {
-        LastError = GetLastError();
-        goto cleanupAdapter;
-    }
-    TcpipAdapterRegKey = RegistryOpenKeyWait(
-        HKEY_LOCAL_MACHINE, TcpipAdapterRegPath, KEY_QUERY_VALUE | KEY_NOTIFY, WAIT_FOR_REGISTRY_TIMEOUT);
-    if (!TcpipAdapterRegKey)
-    {
-        LastError =
-            LOG(WIREGUARD_LOG_ERR,
-                L"Failed to open adapter-specific TCP/IP interface registry key %s",
-                TcpipAdapterRegPath);
-        goto cleanupAdapter;
-    }
-    DummyStr = RegistryQueryStringWait(TcpipAdapterRegKey, L"IpConfig", WAIT_FOR_REGISTRY_TIMEOUT);
-    if (!DummyStr)
-    {
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get %s\\IpConfig", TcpipAdapterRegPath);
-        goto cleanupTcpipAdapterRegKey;
-    }
-    Free(DummyStr);
-
-    WCHAR TcpipInterfaceRegPath[MAX_REG_PATH];
-    if (!GetTcpipInterfaceRegPath(Adapter, TcpipInterfaceRegPath))
-    {
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to determine interface-specific TCP/IP network registry key path");
-        goto cleanupTcpipAdapterRegKey;
-    }
-    for (int Tries = 0; Tries < 300; ++Tries)
-    {
-        HKEY TcpipInterfaceRegKey = RegistryOpenKeyWait(
-            HKEY_LOCAL_MACHINE, TcpipInterfaceRegPath, KEY_QUERY_VALUE | KEY_SET_VALUE, WAIT_FOR_REGISTRY_TIMEOUT);
-        if (!TcpipInterfaceRegKey)
-        {
-            LastError =
-                LOG(WIREGUARD_LOG_ERR,
-                    L"Failed to open interface-specific TCP/IP network registry key %s",
-                    TcpipInterfaceRegPath);
-            goto cleanupTcpipAdapterRegKey;
-        }
-
-        static const DWORD EnableDeadGWDetect = 0;
-        LastError = RegSetKeyValueW(
-            TcpipInterfaceRegKey,
-            NULL,
-            L"EnableDeadGWDetect",
-            REG_DWORD,
-            &EnableDeadGWDetect,
-            sizeof(EnableDeadGWDetect));
-        RegCloseKey(TcpipInterfaceRegKey);
-        if (LastError == ERROR_SUCCESS)
-            break;
-        if (LastError != ERROR_TRANSACTION_NOT_ACTIVE)
-        {
-            LOG_ERROR(LastError, L"Failed to set %s\\EnableDeadGWDetect", TcpipInterfaceRegPath);
-            goto cleanupTcpipAdapterRegKey;
-        }
-        Sleep(10);
-    }
-
     if (!WireGuardSetAdapterName(Adapter, Name))
     {
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to set adapter name %s", Name);
-        goto cleanupTcpipAdapterRegKey;
+        goto cleanupNetDevRegKey;
     }
 
     for (int Tries = 0; Tries < 1000; ++Tries)
@@ -1719,12 +1595,10 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID, BO
     if (!EnsureDeviceObject(Adapter->DevInstanceID))
     {
         LastError = LOG_LAST_ERROR(L"Device object file did not appear");
-        goto cleanupTcpipAdapterRegKey;
+        goto cleanupNetDevRegKey;
     }
     LastError = ERROR_SUCCESS;
 
-cleanupTcpipAdapterRegKey:
-    RegCloseKey(TcpipAdapterRegKey);
 cleanupNetDevRegKey:
     RegCloseKey(NetDevRegKey);
 cleanupDevice:
