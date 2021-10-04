@@ -34,8 +34,8 @@
       <PreprocessorDefinitions Condition="'$(Platform)'=='ARM'">WANT_ARM64_WOW64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
     <Link>
-      <DelayLoadDLLs>advapi32.dll;bcrypt.dll;cfgmgr32.dll;iphlpapi.dll;ole32.dll;nci.dll;setupapi.dll;shell32.dll;shlwapi.dll;version.dll</DelayLoadDLLs>
-      <AdditionalDependencies>Bcrypt.lib;Cfgmgr32.lib;Iphlpapi.lib;$(IntDir)nci.lib;ntdll.lib;Setupapi.lib;shlwapi.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>advapi32.dll;api-ms-win-devices-query-l1-1-0.dll;bcrypt.dll;cfgmgr32.dll;iphlpapi.dll;ole32.dll;nci.dll;setupapi.dll;shell32.dll;shlwapi.dll;version.dll</DelayLoadDLLs>
+      <AdditionalDependencies>Bcrypt.lib;Cfgmgr32.lib;Iphlpapi.lib;onecore.lib;$(IntDir)nci.lib;ntdll.lib;Setupapi.lib;shlwapi.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
       <SubSystem>Windows</SubSystem>
     </Link>

@@ -18,6 +18,15 @@
 #include <initguid.h> /* Keep these two at bottom in this order, so that we only generate extra GUIDs for devpkey. The other keys we'll get from uuid.lib like usual. */
 #include <devpkey.h>
 
+/* We pretend we're Windows 8, and then hack around the limitation in Windows 7 below. */
+#if NTDDI_VERSION == NTDDI_WIN7
+#    undef NTDDI_VERSION
+#    define NTDDI_VERSION NTDDI_WIN8
+#    include <devquery.h>
+#    undef NTDDI_VERSION
+#    define NTDDI_VERSION NTDDI_WIN7
+#endif
+
 #include "../driver/ioctl.h"
 #include "adapter.h"
 #include "logger.h"
@@ -32,7 +41,6 @@
 
 #pragma warning(disable : 4221) /* nonstandard: address of automatic in initializer */
 
-#define WAIT_FOR_REGISTRY_TIMEOUT 10000               /* ms */
 #define MAX_POOL_DEVICE_TYPE (WIREGUARD_MAX_POOL + 8) /* Should accommodate a pool name with " Tunnel" appended */
 
 static const DEVPROPKEY DEVPKEY_WireGuard_Pool = {
@@ -1339,6 +1347,147 @@ cleanup:
     return RET_ERROR(Adapter, LastError);
 }
 
+typedef struct _WAIT_FOR_INTERFACE_CTX
+{
+    HANDLE Event;
+    DWORD LastError;
+} WAIT_FOR_INTERFACE_CTX;
+
+static VOID WINAPI
+WaitForInterfaceCallback(
+    _In_ HDEVQUERY DevQuery,
+    _Inout_ PVOID Context,
+    _In_ const DEV_QUERY_RESULT_ACTION_DATA *ActionData)
+{
+    WAIT_FOR_INTERFACE_CTX *Ctx = Context;
+    Ctx->LastError = ERROR_SUCCESS;
+    if (ActionData->Action == DevQueryResultStateChange)
+    {
+        if (ActionData->Data.State != DevQueryStateAborted)
+            return;
+        Ctx->LastError = ERROR_DEVICE_NOT_AVAILABLE;
+    }
+    else if (ActionData->Action == DevQueryResultRemove)
+        return;
+    SetEvent(Ctx->Event);
+}
+
+#if NTDDI_VERSION == NTDDI_WIN7
+_Must_inspect_result_
+static _Return_type_success_(return != FALSE)
+BOOL
+WaitForInterfaceWin7(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData)
+{
+    ULONG Status, Number;
+    DWORD ValType, Zero;
+    HKEY Key = INVALID_HANDLE_VALUE;
+    BOOLEAN Ret = FALSE;
+    for (int i = 0; i < 1500; ++i)
+    {
+        if (i)
+            Sleep(10);
+        if (Key == INVALID_HANDLE_VALUE)
+        {
+            Key = SetupDiOpenDevRegKey(DevInfo, DevInfoData, DICS_FLAG_GLOBAL, 0, DIREG_DRV, KEY_QUERY_VALUE);
+            if (Key == INVALID_HANDLE_VALUE)
+                continue;
+        }
+        _Analysis_assume_(Key);
+        Zero = 0;
+        if (RegQueryValueExW(Key, L"NetCfgInstanceId", NULL, &ValType, NULL, &Zero) != ERROR_MORE_DATA &&
+            CM_Get_DevNode_Status(&Status, &Number, DevInfoData->DevInst, 0) == CR_SUCCESS &&
+            !(Status & DN_HAS_PROBLEM) && !Number)
+        {
+            Ret = TRUE;
+            break;
+        }
+    }
+    if (Key != INVALID_HANDLE_VALUE)
+        RegCloseKey(Key);
+    return Ret;
+}
+#endif
+
+_Must_inspect_result_
+static _Return_type_success_(return != FALSE)
+BOOL
+WaitForInterface(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData)
+{
+#if NTDDI_VERSION == NTDDI_WIN7
+    if (IsWindows7)
+        return WaitForInterfaceWin7(DevInfo, DevInfoData);
+#endif
+
+    DWORD LastError = ERROR_SUCCESS, Size;
+    WCHAR InstanceId[MAX_INSTANCE_ID];
+    if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, _countof(InstanceId), &Size))
+    {
+        LastError = LOG_LAST_ERROR(L"Failed to get adapter %u instance ID", DevInfoData->DevInst);
+        goto cleanup;
+    }
+
+    static const DEVPROP_BOOLEAN DevPropTrue = DEVPROP_TRUE;
+    const DEVPROP_FILTER_EXPRESSION Filters[] = { { .Operator = DEVPROP_OPERATOR_EQUALS_IGNORE_CASE,
+                                                    .Property.CompKey.Key = DEVPKEY_Device_InstanceId,
+                                                    .Property.CompKey.Store = DEVPROP_STORE_SYSTEM,
+                                                    .Property.Type = DEVPROP_TYPE_STRING,
+                                                    .Property.Buffer = InstanceId,
+                                                    .Property.BufferSize =
+                                                        (ULONG)((wcslen(InstanceId) + 1) * sizeof(InstanceId[0])) },
+                                                  { .Operator = DEVPROP_OPERATOR_EQUALS,
+                                                    .Property.CompKey.Key = DEVPKEY_DeviceInterface_Enabled,
+                                                    .Property.CompKey.Store = DEVPROP_STORE_SYSTEM,
+                                                    .Property.Type = DEVPROP_TYPE_BOOLEAN,
+                                                    .Property.Buffer = (PVOID)&DevPropTrue,
+                                                    .Property.BufferSize = sizeof(DevPropTrue) },
+                                                  { .Operator = DEVPROP_OPERATOR_EQUALS,
+                                                    .Property.CompKey.Key = DEVPKEY_DeviceInterface_ClassGuid,
+                                                    .Property.CompKey.Store = DEVPROP_STORE_SYSTEM,
+                                                    .Property.Type = DEVPROP_TYPE_GUID,
+                                                    .Property.Buffer = (PVOID)&GUID_DEVINTERFACE_NET,
+                                                    .Property.BufferSize = sizeof(GUID_DEVINTERFACE_NET) } };
+    WAIT_FOR_INTERFACE_CTX Ctx = { .Event = CreateEventW(NULL, FALSE, FALSE, NULL) };
+    if (!Ctx.Event)
+    {
+        LastError = LOG_LAST_ERROR(L"Failed to create event");
+        goto cleanup;
+    }
+    HDEVQUERY Query;
+    HRESULT HRet = DevCreateObjectQuery(
+        DevObjectTypeDeviceInterface,
+        DevQueryFlagUpdateResults,
+        0,
+        NULL,
+        _countof(Filters),
+        Filters,
+        WaitForInterfaceCallback,
+        &Ctx,
+        &Query);
+    if (HRet < 0)
+    {
+        LastError = LOG_ERROR(HRet, L"Failed to create device query");
+        goto cleanupEvent;
+    }
+    LastError = WaitForSingleObject(Ctx.Event, 15000);
+    if (LastError != WAIT_OBJECT_0)
+    {
+        if (LastError == WAIT_FAILED)
+            LastError = LOG_LAST_ERROR(L"Failed to wait for device query");
+        else
+            LastError = LOG_ERROR(LastError, L"Timed out waiting for device query");
+        goto cleanupQuery;
+    }
+    LastError = Ctx.LastError;
+    if (LastError != ERROR_SUCCESS)
+        LastError = LOG_ERROR(LastError, L"Failed to get enabled device");
+cleanupQuery:
+    DevCloseObjectQuery(Query);
+cleanupEvent:
+    CloseHandle(Ctx.Event);
+cleanup:
+    return RET_ERROR(TRUE, LastError);
+}
+
 _Use_decl_annotations_
 WIREGUARD_ADAPTER_HANDLE WINAPI
 WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
@@ -1441,51 +1590,51 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
     if (!SetupDiCallClassInstaller(DIF_REGISTER_COINSTALLERS, Adapter->DevInfo, &Adapter->DevInfoData))
         LOG_LAST_ERROR(L"Failed to register adapter %u coinstallers", Adapter->DevInfoData.DevInst);
 
-    HKEY NetDevRegKey = INVALID_HANDLE_VALUE;
-    const int PollTimeout = 50 /* ms */;
-    for (int i = 0; NetDevRegKey == INVALID_HANDLE_VALUE && i < WAIT_FOR_REGISTRY_TIMEOUT / PollTimeout; ++i)
-    {
-        if (i)
-            Sleep(PollTimeout);
-        NetDevRegKey = SetupDiOpenDevRegKey(
-            Adapter->DevInfo,
-            &Adapter->DevInfoData,
-            DICS_FLAG_GLOBAL,
-            0,
-            DIREG_DRV,
-            KEY_SET_VALUE | KEY_QUERY_VALUE | KEY_NOTIFY);
-    }
-    if (NetDevRegKey == INVALID_HANDLE_VALUE)
-    {
-        LastError =
-            LOG_LAST_ERROR(L"Failed to open adapter %u device-specific registry key", Adapter->DevInfoData.DevInst);
-        goto cleanupDevice;
-    }
     if (RequestedGUID)
     {
+        HKEY NetDevRegKey = INVALID_HANDLE_VALUE;
+        for (int i = 0; NetDevRegKey == INVALID_HANDLE_VALUE && i < 1000; ++i)
+        {
+            if (i)
+                Sleep(10);
+            NetDevRegKey = SetupDiOpenDevRegKey(
+                Adapter->DevInfo,
+                &Adapter->DevInfoData,
+                DICS_FLAG_GLOBAL,
+                0,
+                DIREG_DRV,
+                KEY_SET_VALUE | KEY_QUERY_VALUE | KEY_NOTIFY);
+        }
+        if (NetDevRegKey == INVALID_HANDLE_VALUE)
+        {
+            LastError =
+                LOG_LAST_ERROR(L"Failed to open adapter %u device-specific registry key", Adapter->DevInfoData.DevInst);
+            goto cleanupDevice;
+        }
         LastError = RegSetValueExW(
             NetDevRegKey, L"SuggestedInstanceId", 0, REG_BINARY, (const BYTE *)RequestedGUID, sizeof(*RequestedGUID));
+        RegCloseKey(NetDevRegKey);
         if (LastError != ERROR_SUCCESS)
         {
             WCHAR RegPath[MAX_REG_PATH];
             LoggerGetRegistryKeyPath(NetDevRegKey, RegPath);
             LOG_ERROR(LastError, L"Failed to set %.*s\\SuggestedInstanceId", MAX_REG_PATH, RegPath);
-            goto cleanupNetDevRegKey;
+            goto cleanupDevice;
         }
     }
 
     if (!SetupDiCallClassInstaller(DIF_INSTALLINTERFACES, Adapter->DevInfo, &Adapter->DevInfoData))
         LOG_LAST_ERROR(L"Failed to install adapter %u interfaces", Adapter->DevInfoData.DevInst);
-
     if (!SetupDiCallClassInstaller(DIF_INSTALLDEVICE, Adapter->DevInfo, &Adapter->DevInfoData))
     {
         LastError = LOG_LAST_ERROR(L"Failed to install adapter %u device", Adapter->DevInfoData.DevInst);
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
+
     if (CheckReboot(Adapter->DevInfo, &Adapter->DevInfoData))
     {
         LastError = ERROR_PNP_REBOOT_REQUIRED;
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
 
     if (!SetupDiSetDevicePropertyW(
@@ -1499,7 +1648,7 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
             0))
     {
         LastError = LOG_LAST_ERROR(L"Failed to set adapter %u pool", Adapter->DevInfoData.DevInst);
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
     if (!SetupDiSetDeviceRegistryPropertyW(
             Adapter->DevInfo,
@@ -1509,15 +1658,14 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
             (DWORD)((wcslen(PoolDeviceTypeName) + 1) * sizeof(*PoolDeviceTypeName))))
     {
         LastError = LOG_LAST_ERROR(L"Failed to set adapter %u description", Adapter->DevInfoData.DevInst);
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
 
-    for (int Tries = 0; Tries < 1000; ++Tries)
+    if (!WaitForInterface(Adapter->DevInfo, &Adapter->DevInfoData))
     {
         DEVPROPTYPE PropertyType = 0;
         NTSTATUS NtStatus = 0;
         INT32 ProblemCode = 0;
-
         if (!SetupDiGetDevicePropertyW(
                 Adapter->DevInfo,
                 &Adapter->DevInfoData,
@@ -1540,72 +1688,32 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
                 0) ||
             (PropertyType != DEVPROP_TYPE_INT32 && PropertyType != DEVPROP_TYPE_UINT32))
             ProblemCode = 0;
-        if (NtStatus == STATUS_PNP_DEVICE_CONFIGURATION_PENDING && Tries < 999)
-        {
-            Sleep(10);
-            continue;
-        }
-        if (NT_SUCCESS(NtStatus) && !ProblemCode)
-            break;
         LastError = RtlNtStatusToDosError(NtStatus);
         if (LastError == ERROR_SUCCESS)
-            LastError = ERROR_NOT_READY;
-        LOG_ERROR(
-            LastError,
-            L"Failed to setup adapter (problem code: 0x%x, ntstatus: 0x%x)",
-            ProblemCode,
-            NtStatus);
-        goto cleanupNetDevRegKey;
-    }
-
-    /* DIF_INSTALLDEVICE returns almost immediately, while the device installation continues in the background. It might
-     * take a while, before all registry keys and values are populated. */
-    LPWSTR DummyStr = RegistryQueryStringWait(NetDevRegKey, L"NetCfgInstanceId", WAIT_FOR_REGISTRY_TIMEOUT);
-    if (!DummyStr)
-    {
-        WCHAR RegPath[MAX_REG_PATH];
-        LoggerGetRegistryKeyPath(NetDevRegKey, RegPath);
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get %.*s\\NetCfgInstanceId", MAX_REG_PATH, RegPath);
-        goto cleanupNetDevRegKey;
-    }
-    Free(DummyStr);
-    DWORD DummyDWORD;
-    if (!RegistryQueryDWORDWait(NetDevRegKey, L"NetLuidIndex", WAIT_FOR_REGISTRY_TIMEOUT, &DummyDWORD))
-    {
-        WCHAR RegPath[MAX_REG_PATH];
-        LoggerGetRegistryKeyPath(NetDevRegKey, RegPath);
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get %.*s\\NetLuidIndex", MAX_REG_PATH, RegPath);
-        goto cleanupNetDevRegKey;
-    }
-    if (!RegistryQueryDWORDWait(NetDevRegKey, L"*IfType", WAIT_FOR_REGISTRY_TIMEOUT, &DummyDWORD))
-    {
-        WCHAR RegPath[MAX_REG_PATH];
-        LoggerGetRegistryKeyPath(NetDevRegKey, RegPath);
-        LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get %.*s\\*IfType", MAX_REG_PATH, RegPath);
-        goto cleanupNetDevRegKey;
+            LastError = ERROR_DEVICE_NOT_AVAILABLE;
+        LOG_ERROR(LastError, L"Failed to setup adapter (problem code: 0x%x, ntstatus: 0x%x)", ProblemCode, NtStatus);
+        goto cleanupDevice;
     }
 
     if (!PopulateAdapterData(Adapter, Pool))
     {
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to populate adapter %u data", Adapter->DevInfoData.DevInst);
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
 
     if (!WireGuardSetAdapterName(Adapter, Name))
     {
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to set adapter name %s", Name);
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
 
     if (!EnsureDeviceObject(Adapter->DevInstanceID))
     {
         LastError = LOG_LAST_ERROR(L"Device object file did not appear");
-        goto cleanupNetDevRegKey;
+        goto cleanupDevice;
     }
     LastError = ERROR_SUCCESS;
 
-cleanupNetDevRegKey:
-    RegCloseKey(NetDevRegKey);
 cleanupDevice:
     if (LastError != ERROR_SUCCESS)
     {

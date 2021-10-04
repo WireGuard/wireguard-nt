@@ -24,4 +24,4 @@ extern HANDLE ModuleHeap;
 extern SECURITY_ATTRIBUTES SecurityAttributes;
 extern BOOL IsLocalSystem;
 extern USHORT NativeMachine;
-extern BOOL IsWindows10;
+extern BOOL IsWindows10, IsWindows7;

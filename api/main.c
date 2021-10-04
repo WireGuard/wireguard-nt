@@ -21,7 +21,7 @@ HANDLE ModuleHeap;
 SECURITY_ATTRIBUTES SecurityAttributes = { .nLength = sizeof(SECURITY_ATTRIBUTES) };
 BOOL IsLocalSystem;
 USHORT NativeMachine = IMAGE_FILE_PROCESS;
-BOOL IsWindows10;
+BOOL IsWindows10, IsWindows7;
 
 static FARPROC WINAPI
 DelayedLoadLibraryHook(unsigned dliNotify, PDelayLoadInfo pdli)
@@ -72,9 +72,10 @@ cleanupProcessToken:
 
 static void EnvInit(VOID)
 {
-    DWORD MajorVersion;
-    RtlGetNtVersionNumbers(&MajorVersion, NULL, NULL);
+    DWORD MajorVersion, MinorVersion;
+    RtlGetNtVersionNumbers(&MajorVersion, &MinorVersion, NULL);
     IsWindows10 = MajorVersion >= 10;
+    IsWindows7 = MajorVersion == 6 && MinorVersion == 1;
 
 #ifdef MAYBE_WOW64
     typedef BOOL(WINAPI * IsWow64Process2_t)(
