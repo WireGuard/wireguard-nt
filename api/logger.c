@@ -46,41 +46,30 @@ StrTruncate(_Inout_count_(StrChars) LPWSTR Str, _In_ SIZE_T StrChars)
 
 _Use_decl_annotations_
 DWORD
-LoggerLog(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR Function, LPCWSTR LogLine)
+LoggerLog(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR LogLine)
 {
     DWORD LastError = GetLastError();
-    if (Function)
-    {
-        WCHAR Combined[0x400];
-        if (_snwprintf_s(Combined, _countof(Combined), _TRUNCATE, L"%s: %s", Function, LogLine) == -1)
-            StrTruncate(Combined, _countof(Combined));
-        Logger(Level, Now(), Combined);
-    }
-    else
-        Logger(Level, Now(), LogLine);
+    Logger(Level, Now(), LogLine);
     SetLastError(LastError);
     return LastError;
 }
 
 _Use_decl_annotations_
 DWORD
-LoggerLogV(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR Function, LPCWSTR Format, va_list Args)
+LoggerLogV(WIREGUARD_LOGGER_LEVEL Level, LPCWSTR Format, va_list Args)
 {
     DWORD LastError = GetLastError();
     WCHAR LogLine[0x400];
     if (_vsnwprintf_s(LogLine, _countof(LogLine), _TRUNCATE, Format, Args) == -1)
         StrTruncate(LogLine, _countof(LogLine));
-    if (Function)
-        LoggerLog(Level, Function, LogLine);
-    else
-        Logger(Level, Now(), LogLine);
+    Logger(Level, Now(), LogLine);
     SetLastError(LastError);
     return LastError;
 }
 
 _Use_decl_annotations_
 DWORD
-LoggerError(DWORD Error, LPCWSTR Function, LPCWSTR Prefix)
+LoggerError(DWORD Error, LPCWSTR Prefix)
 {
     LPWSTR SystemMessage = NULL, FormattedMessage = NULL;
     FormatMessageW(
@@ -94,12 +83,12 @@ LoggerError(DWORD Error, LPCWSTR Function, LPCWSTR Prefix)
     FormatMessageW(
         FORMAT_MESSAGE_FROM_STRING | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_ARGUMENT_ARRAY |
             FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        SystemMessage ? L"%4: %1: %3(Code 0x%2!08X!)" : L"%4: %1: Code 0x%2!08X!",
+        SystemMessage ? L"%1: %3(Code 0x%2!08X!)" : L"%1: Code 0x%2!08X!",
         0,
         0,
         (VOID *)&FormattedMessage,
         0,
-        (va_list *)(DWORD_PTR[]){ (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage, (DWORD_PTR)Function });
+        (va_list *)(DWORD_PTR[]){ (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage });
     if (FormattedMessage)
         Logger(WIREGUARD_LOG_ERR, Now(), FormattedMessage);
     LocalFree(FormattedMessage);
@@ -109,12 +98,12 @@ LoggerError(DWORD Error, LPCWSTR Function, LPCWSTR Prefix)
 
 _Use_decl_annotations_
 DWORD
-LoggerErrorV(DWORD Error, LPCWSTR Function, LPCWSTR Format, va_list Args)
+LoggerErrorV(DWORD Error, LPCWSTR Format, va_list Args)
 {
-    WCHAR Prefix[0x400];
-    if (_vsnwprintf_s(Prefix, _countof(Prefix), _TRUNCATE, Format, Args) == -1)
-        StrTruncate(Prefix, _countof(Prefix));
-    return LoggerError(Error, Function, Prefix);
+    WCHAR LogLine[0x400];
+    if (_vsnwprintf_s(LogLine, _countof(LogLine), _TRUNCATE, Format, Args) == -1)
+        StrTruncate(LogLine, _countof(LogLine));
+    return LoggerError(Error, LogLine);
 }
 
 _Use_decl_annotations_
