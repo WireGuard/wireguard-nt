@@ -1500,12 +1500,84 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
     DWORD LastError = ERROR_SUCCESS;
     LOG(WIREGUARD_LOG_INFO, L"Creating adapter");
 
-    if (!IsWindows10)
-        RequestedGUID = NULL;
-
     WIREGUARD_ADAPTER *Adapter = Zalloc(sizeof(*Adapter));
     if (!Adapter)
         return NULL;
+
+    WCHAR InstanceIdInf[MAX_PATH];
+    if (!GetWindowsDirectoryW(InstanceIdInf, _countof(InstanceIdInf)) ||
+        !PathAppend(InstanceIdInf, L"INF\\wireguard-instanceid.inf"))
+    {
+        LastError = LOG_ERROR(ERROR_BUFFER_OVERFLOW, L"Failed to construct INF path");
+        goto cleanupAdapter;
+    }
+    HANDLE InstanceIdMutex = NamespaceTakeInstanceIdMutex();
+    if (!InstanceIdMutex)
+    {
+        LastError = LOG_LAST_ERROR(L"Failed to take instance ID mutex");
+        goto cleanupAdapter;
+    }
+    if (RequestedGUID && IsWindows10)
+    {
+        HANDLE InstanceIdFile = CreateFileW(
+            InstanceIdInf,
+            GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        if (InstanceIdFile == INVALID_HANDLE_VALUE)
+        {
+            LastError = LOG_LAST_ERROR(L"Failed to open %s for writing", InstanceIdInf);
+            goto cleanupInstanceIdMutex;
+        }
+        static const WCHAR InfTemplate[] =
+            L"[Version]\r\n"
+            L"Signature = \"$Windows NT$\"\r\n"
+            L"[WireGuard.NetSetup]\r\n"
+            L"AddReg = WireGuard.SuggestedInstanceId\r\n"
+            L"[WireGuard.SuggestedInstanceId]\r\n"
+            L"HKR,,SuggestedInstanceId,1,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X\r\n";
+        WCHAR InfContents[_countof(InfTemplate)];
+        BYTE *P = (BYTE *)RequestedGUID;
+        _snwprintf_s(
+            InfContents,
+            _countof(InfContents),
+            _TRUNCATE,
+            InfTemplate,
+            P[0],
+            P[1],
+            P[2],
+            P[3],
+            P[4],
+            P[5],
+            P[6],
+            P[7],
+            P[8],
+            P[9],
+            P[10],
+            P[11],
+            P[12],
+            P[13],
+            P[14],
+            P[15]);
+        DWORD BytesWritten;
+        if (!WriteFile(
+                InstanceIdFile,
+                InfContents,
+                (DWORD)(wcslen(InfContents) * sizeof(InfContents[0])),
+                &BytesWritten,
+                NULL))
+        {
+            LastError = LOG_LAST_ERROR(L"Failed to write bytes to %s", InstanceIdInf);
+            CloseHandle(InstanceIdFile);
+            goto cleanupInstanceIdFile;
+        }
+        CloseHandle(InstanceIdFile);
+    }
+    else if (IsWindows10)
+        DeleteFileW(InstanceIdInf);
 
     Adapter->DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
     if (Adapter->DevInfo == INVALID_HANDLE_VALUE)
@@ -1589,40 +1661,6 @@ WireGuardCreateAdapter(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
     }
     if (!SetupDiCallClassInstaller(DIF_REGISTER_COINSTALLERS, Adapter->DevInfo, &Adapter->DevInfoData))
         LOG_LAST_ERROR(L"Failed to register adapter %u coinstallers", Adapter->DevInfoData.DevInst);
-
-    if (RequestedGUID)
-    {
-        HKEY NetDevRegKey = INVALID_HANDLE_VALUE;
-        for (int i = 0; NetDevRegKey == INVALID_HANDLE_VALUE && i < 1000; ++i)
-        {
-            if (i)
-                Sleep(10);
-            NetDevRegKey = SetupDiOpenDevRegKey(
-                Adapter->DevInfo,
-                &Adapter->DevInfoData,
-                DICS_FLAG_GLOBAL,
-                0,
-                DIREG_DRV,
-                KEY_SET_VALUE | KEY_QUERY_VALUE | KEY_NOTIFY);
-        }
-        if (NetDevRegKey == INVALID_HANDLE_VALUE)
-        {
-            LastError =
-                LOG_LAST_ERROR(L"Failed to open adapter %u device-specific registry key", Adapter->DevInfoData.DevInst);
-            goto cleanupDevice;
-        }
-        LastError = RegSetValueExW(
-            NetDevRegKey, L"SuggestedInstanceId", 0, REG_BINARY, (const BYTE *)RequestedGUID, sizeof(*RequestedGUID));
-        RegCloseKey(NetDevRegKey);
-        if (LastError != ERROR_SUCCESS)
-        {
-            WCHAR RegPath[MAX_REG_PATH];
-            LoggerGetRegistryKeyPath(NetDevRegKey, RegPath);
-            LOG_ERROR(LastError, L"Failed to set %.*s\\SuggestedInstanceId", MAX_REG_PATH, RegPath);
-            goto cleanupDevice;
-        }
-    }
-
     if (!SetupDiCallClassInstaller(DIF_INSTALLINTERFACES, Adapter->DevInfo, &Adapter->DevInfoData))
         LOG_LAST_ERROR(L"Failed to install adapter %u interfaces", Adapter->DevInfoData.DevInst);
     if (!SetupDiCallClassInstaller(DIF_INSTALLDEVICE, Adapter->DevInfo, &Adapter->DevInfoData))
@@ -1731,6 +1769,10 @@ cleanupDevice:
 cleanupDriverInfoList:
     SelectDriverDeferredCleanup(DevInfoExistingAdapters, ExistingAdapters);
     SetupDiDestroyDriverInfoList(Adapter->DevInfo, &Adapter->DevInfoData, SPDIT_COMPATDRIVER);
+cleanupInstanceIdFile:
+    DeleteFileW(InstanceIdInf);
+cleanupInstanceIdMutex:
+    NamespaceReleaseMutex(InstanceIdMutex);
 cleanupAdapter:
     if (LastError != ERROR_SUCCESS)
         WireGuardFreeAdapter(Adapter);

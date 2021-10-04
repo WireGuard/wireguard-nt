@@ -215,6 +215,31 @@ NamespaceTakeDriverInstallationMutex(VOID)
 }
 
 _Use_decl_annotations_
+HANDLE
+NamespaceTakeInstanceIdMutex(VOID)
+{
+    if (!NamespaceRuntimeInit())
+        return NULL;
+    HANDLE Mutex = CreateMutexW(&SecurityAttributes, FALSE, L"WireGuard\\WireGuard-InstanceId-Mutex");
+    if (!Mutex)
+    {
+        LOG_LAST_ERROR(L"Failed to create mutex");
+        return NULL;
+    }
+    DWORD Result = WaitForSingleObject(Mutex, INFINITE);
+    switch (Result)
+    {
+    case WAIT_OBJECT_0:
+    case WAIT_ABANDONED:
+        return Mutex;
+    }
+    LOG(WIREGUARD_LOG_ERR, L"Failed to get mutex (status: 0x%x)", Result);
+    CloseHandle(Mutex);
+    SetLastError(ERROR_GEN_FAILURE);
+    return NULL;
+}
+
+_Use_decl_annotations_
 VOID
 NamespaceReleaseMutex(HANDLE Mutex)
 {
