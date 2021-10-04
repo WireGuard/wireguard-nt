@@ -42,7 +42,6 @@ EnableDhcp = 0 ; Disable DHCP
 AddService = WireGuard, 2, WireGuard.Service, WireGuard.EventLog ; 2=SPSVCINST_ASSOCSERVICE
 
 [WireGuard.Ndi]
-HKR, , DeviceVxDs, , wireguard.sys
 HKR, Ndi, Service, 0, WireGuard
 HKR, Ndi\Interfaces, UpperRange, , "ndis5"
 HKR, Ndi\Interfaces, LowerRange, , "nolower"
