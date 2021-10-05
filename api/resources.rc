@@ -16,16 +16,22 @@ downlevelshim.dll RCDATA "downlevelshim.dll"
 
 #if defined(WANT_AMD64_WOW64)
 #    if defined(BUILT_AMD64_WOW64)
-wireguard-amd64.dll RCDATA "amd64\\wireguard.dll"
+wireguard-amd64.cat RCDATA "amd64\\driver\\wireguard.cat"
+wireguard-amd64.inf RCDATA "amd64\\driver\\wireguard.inf"
+wireguard-amd64.sys RCDATA "amd64\\driver\\wireguard.sys"
+setupapihost-amd64.dll RCDATA "amd64\\setupapihost.dll"
 #    else
-#        pragma message("AMD64 wireguard.dll was not built, so this will not work from WOW64")
+#        pragma message("AMD64 wireguard.sys was not built, so this will not work from WOW64")
 #    endif
 #endif
 #if defined(WANT_ARM64_WOW64)
 #    if defined(BUILT_ARM64_WOW64)
-wireguard-arm64.dll RCDATA "arm64\\wireguard.dll"
+wireguard-arm64.cat RCDATA "arm64\\driver\\wireguard.cat"
+wireguard-arm64.inf RCDATA "arm64\\driver\\wireguard.inf"
+wireguard-arm64.sys RCDATA "arm64\\driver\\wireguard.sys"
+setupapihost-arm64.dll RCDATA "arm64\\setupapihost.dll"
 #    else
-#        pragma message("ARM64 wireguard.dll was not built, so this will not work from WOW64")
+#        pragma message("ARM64 wireguard.sys was not built, so this will not work from WOW64")
 #    endif
 #endif
 

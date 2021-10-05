@@ -33,25 +33,6 @@ BOOL
 RegistryGetString(_Inout_ LPWSTR *Buf, _In_ DWORD Len, _In_ DWORD ValueType);
 
 /**
- * Validates and/or sanitizes multi-string value read from registry.
- *
- * @param Buf           On input, it contains a pointer to pointer where the data is stored. The data must be allocated
- *                      using HeapAlloc(ModuleHeap, 0). On output, it contains a pointer to pointer where the sanitized
- *                      data is stored. It must be released with HeapFree(ModuleHeap, 0, *Buf) after use.
- *
- * @param Len           Length of data string in wide characters.
- *
- * @param ValueType     Type of data. Must be one of REG_MULTI_SZ, REG_SZ or REG_EXPAND_SZ.
- *
- * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
- *         get extended error information, call GetLastError.
- */
-_Must_inspect_result_
-_Return_type_success_(return != FALSE)
-BOOL
-RegistryGetMultiString(_Inout_ PZZWSTR *Buf, _In_ DWORD Len, _In_ DWORD ValueType);
-
-/**
  * Reads string value from registry key.
  *
  * @param Key           Handle of the registry key to read from. Must be opened with read access.

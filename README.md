@@ -17,12 +17,12 @@ WireGuardNT is deployed as a platform-specific `wireguard.dll` file. Install the
 
 Include the [`wireguard.h` file](https://git.zx2c4.com/wireguard-nt/tree/api/wireguard.h) in your project simply by copying it there and dynamically load the `wireguard.dll` using [`LoadLibraryEx()`](https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexa) and [`GetProcAddress()`](https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress) to resolve each function, using the typedefs provided in the header file. The [`InitializeWireGuardNT` function in the example.c code](https://git.zx2c4.com/wireguard-nt/tree/example/example.c) provides this in a function that you can simply copy and paste.
 
-With the library setup, WireGuardNT can then be used by first creating an adapter, configuring it, and then setting its status to "up". Adapters have names (e.g. "OfficeNet"), and each one belongs to a _pool_ (e.g. "WireGuard"). So, for example, the WireGuard application app creates multiple tunnels all inside of its "WireGuard" _pool_:
+With the library setup, WireGuardNT can then be used by first creating an adapter, configuring it, and then setting its status to "up". Adapters have names (e.g. "OfficeNet") and types (e.g. "WireGuard").
 
 ```C
-WIREGUARD_ADAPTER_HANDLE Adapter1 = WireGuardCreateAdapter(L"WireGuard", L"OfficeNet", &SomeFixedGUID1, NULL);
-WIREGUARD_ADAPTER_HANDLE Adapter2 = WireGuardCreateAdapter(L"WireGuard", L"HomeNet", &SomeFixedGUID2, NULL);
-WIREGUARD_ADAPTER_HANDLE Adapter3 = WireGuardCreateAdapter(L"WireGuard", L"Data Center", &SomeFixedGUID3, NULL);
+WIREGUARD_ADAPTER_HANDLE Adapter1 = WireGuardCreateAdapter(L"OfficeNet", L"WireGuard", &SomeFixedGUID1);
+WIREGUARD_ADAPTER_HANDLE Adapter2 = WireGuardCreateAdapter(L"HomeNet", L"WireGuard", &SomeFixedGUID2);
+WIREGUARD_ADAPTER_HANDLE Adapter3 = WireGuardCreateAdapter(L"Data Center", L"WireGuard", &SomeFixedGUID3);
 ```
 
 After creating an adapter, we can use it by setting a configuration and setting its status to "up":

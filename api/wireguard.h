@@ -39,145 +39,68 @@ extern "C" {
 typedef struct _WIREGUARD_ADAPTER *WIREGUARD_ADAPTER_HANDLE;
 
 /**
- * Maximum pool name length including zero terminator
- */
-#define WIREGUARD_MAX_POOL 256
-
-/**
  * Creates a new WireGuard adapter.
- *
- * @param Pool          Name of the adapter pool. Zero-terminated string of up to WIREGUARD_MAX_POOL-1 characters.
  *
  * @param Name          The requested name of the adapter. Zero-terminated string of up to MAX_ADAPTER_NAME-1
  *                      characters.
+ *
+ * @param TunelType     Name of the adapter tunnel type. Zero-terminated string of up to MAX_ADAPTER_NAME-1
+ * characters.
  *
  * @param RequestedGUID The GUID of the created network adapter, which then influences NLA generation deterministically.
  *                      If it is set to NULL, the GUID is chosen by the system at random, and hence a new NLA entry is
  *                      created for each new adapter. It is called "requested" GUID because the API it uses is
  *                      completely undocumented, and so there could be minor interesting complications with its usage.
  *
- * @return If the function succeeds, the return value is the adapter handle. Must be released with WireGuardFreeAdapter.
- * If the function fails, the return value is NULL. To get extended error information, call GetLastError.
+ * @return If the function succeeds, the return value is the adapter handle. Must be released with
+ * WireGuardCloseAdapter. If the function fails, the return value is NULL. To get extended error information, call
+ * GetLastError.
  */
 typedef _Must_inspect_result_
 _Return_type_success_(return != NULL)
 _Post_maybenull_
 WIREGUARD_ADAPTER_HANDLE(WINAPI WIREGUARD_CREATE_ADAPTER_FUNC)
-(_In_z_ LPCWSTR Pool, _In_z_ LPCWSTR Name, _In_opt_ const GUID *RequestedGUID);
+(_In_z_ LPCWSTR Name, _In_z_ LPCWSTR TunnelType, _In_opt_ const GUID *RequestedGUID);
 
 /**
  * Opens an existing WireGuard adapter.
  *
- * @param Pool          Name of the adapter pool. Zero-terminated string of up to WIREGUARD_MAX_POOL-1 characters.
+ * @param Name          The requested name of the adapter. Zero-terminated string of up to MAX_ADAPTER_NAME-1
+ *                      characters.
  *
- * @param Name          Adapter name. Zero-terminated string of up to MAX_ADAPTER_NAME-1 characters.
- *
- * @return If the function succeeds, the return value is adapter handle. Must be released with WireGuardFreeAdapter. If
- * the function fails, the return value is NULL. To get extended error information, call GetLastError. Possible errors
- * include the following: ERROR_FILE_NOT_FOUND if adapter with given name is not found; ERROR_ALREADY_EXISTS if adapter
- * is found but not a WireGuard-class or not a member of the pool
+ * @return If the function succeeds, the return value is the adapter handle. Must be released with
+ * WireGuardCloseAdapter. If the function fails, the return value is NULL. To get extended error information, call
+ * GetLastError.
  */
 typedef _Must_inspect_result_
 _Return_type_success_(return != NULL)
 _Post_maybenull_
-WIREGUARD_ADAPTER_HANDLE(WINAPI WIREGUARD_OPEN_ADAPTER_FUNC)(_In_z_ LPCWSTR Pool, _In_z_ LPCWSTR Name);
+WIREGUARD_ADAPTER_HANDLE(WINAPI WIREGUARD_OPEN_ADAPTER_FUNC)(_In_z_ LPCWSTR Name);
 
 /**
- * Deletes a WireGuard adapter.
+ * Releases WireGuard adapter resources and, if adapter was created with WireGuardCreateAdapter, removes adapter.
  *
- * @param Adapter         Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter.
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter.
+ */
+typedef VOID(WINAPI WIREGUARD_CLOSE_ADAPTER_FUNC)(_In_opt_ WIREGUARD_ADAPTER_HANDLE Adapter);
+
+/**
+ * Deletes the WireGuard driver if there are no more adapters in use.
  *
  * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
  *         get extended error information, call GetLastError.
  */
 typedef _Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_DELETE_ADAPTER_FUNC)
-(_In_ WIREGUARD_ADAPTER_HANDLE Adapter);
-
-/**
- * Called by WireGuardEnumAdapters for each adapter in the pool.
- *
- * @param Adapter       Adapter handle, which will be freed when this function returns.
- *
- * @param Param         An application-defined value passed to the WireGuardEnumAdapters.
- *
- * @return Non-zero to continue iterating adapters; zero to stop.
- */
-typedef BOOL(CALLBACK *WIREGUARD_ENUM_CALLBACK)(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _In_ LPARAM Param);
-
-/**
- * Enumerates all WireGuard adapters.
- *
- * @param Pool          Name of the adapter pool. Zero-terminated string of up to WIREGUARD_MAX_POOL-1 characters.
- *
- * @param Callback      Callback function. To continue enumeration, the callback function must return TRUE; to stop
- *                      enumeration, it must return FALSE.
- *
- * @param Param         An application-defined value to be passed to the callback function.
- *
- * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
- *         get extended error information, call GetLastError.
- */
-typedef _Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_ENUM_ADAPTERS_FUNC)
-(_In_z_ LPCWSTR Pool, _In_ WIREGUARD_ENUM_CALLBACK Callback, _In_ LPARAM Param);
-
-/**
- * Releases WireGuard adapter resources.
- *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter.
- */
-typedef VOID(WINAPI WIREGUARD_FREE_ADAPTER_FUNC)(_In_opt_ WIREGUARD_ADAPTER_HANDLE Adapter);
-
-/**
- * Deletes all WireGuard adapters in a pool and if there are no more adapters in any other pools, also removes WireGuard
- * from the driver store, usually called by uninstallers.
- *
- * @param Pool            Name of the adapter pool. Zero-terminated string of up to WIREGUARD_MAX_POOL-1 characters.
- *
- * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
- *         get extended error information, call GetLastError.
- */
-typedef _Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_DELETE_POOL_DRIVER_FUNC)(_In_z_ LPCWSTR Pool);
+BOOL(WINAPI WIREGUARD_DELETE_DRIVER_FUNC)(VOID);
 
 /**
  * Returns the LUID of the adapter.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param Luid          Pointer to LUID to receive adapter LUID.
  */
 typedef VOID(WINAPI WIREGUARD_GET_ADAPTER_LUID_FUNC)(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _Out_ NET_LUID *Luid);
-
-/**
- * Returns the name of the WireGuard adapter.
- *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
- *
- * @param Name          Pointer to a string to receive adapter name
- *
- * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
- *         get extended error information, call GetLastError.
- */
-typedef _Must_inspect_result_
-_Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_GET_ADAPTER_NAME_FUNC)
-(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _Out_writes_z_(MAX_ADAPTER_NAME) LPWSTR Name);
-
-/**
- * Sets name of the WireGuard adapter.
- *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
- *
- * @param Name          Adapter name. Zero-terminated string of up to MAX_ADAPTER_NAME-1 characters.
- *
- * @return If the function succeeds, the return value is nonzero. If the function fails, the return value is zero. To
- *         get extended error information, call GetLastError.
- */
-typedef _Return_type_success_(return != FALSE)
-BOOL(WINAPI WIREGUARD_SET_ADAPTER_NAME_FUNC)
-(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _In_reads_or_z_(MAX_ADAPTER_NAME) LPCWSTR Name);
 
 /**
  * Determines the version of the WireGuard driver currently loaded.
@@ -235,7 +158,7 @@ typedef enum
 /**
  * Sets whether and how the adapter logs to the logger previously set up with WireGuardSetLoggerFunc.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param LogState      Adapter logging state.
  *
@@ -258,7 +181,7 @@ typedef enum
 /**
  * Sets the adapter state of the WireGuard adapter. Note: sockets are owned by the process that sets the state to up.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param State         Adapter state.
  *
@@ -272,7 +195,7 @@ BOOL(WINAPI WIREGUARD_SET_ADAPTER_STATE_FUNC)
 /**
  * Gets the adapter state of the WireGuard adapter.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param State         Pointer to adapter state.
  *
@@ -345,7 +268,7 @@ struct ALIGNED(8) _WIREGUARD_INTERFACE
 /**
  * Sets the configuration of the WireGuard adapter.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param Config        Configuration for the adapter.
  *
@@ -361,7 +284,7 @@ BOOL(WINAPI WIREGUARD_SET_CONFIGURATION_FUNC)
 /**
  * Gets the configuration of the WireGuard adapter.
  *
- * @param Adapter       Adapter handle obtained with WireGuardOpenAdapter or WireGuardCreateAdapter
+ * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
  * @param Config        Configuration for the adapter.
  *

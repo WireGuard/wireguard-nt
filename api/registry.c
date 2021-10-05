@@ -56,48 +56,6 @@ RegistryGetString(LPWSTR *Buf, DWORD Len, DWORD ValueType)
     }
 }
 
-_Use_decl_annotations_
-BOOL
-RegistryGetMultiString(PZZWSTR *Buf, DWORD Len, DWORD ValueType)
-{
-    if (ValueType == REG_MULTI_SZ)
-    {
-        for (size_t i = 0;; i += wcsnlen(*Buf + i, Len - i) + 1)
-        {
-            if (i > Len)
-            {
-                /* Missing string and list terminators. */
-                PZZWSTR BufZ = ReZallocArray(*Buf, (SIZE_T)Len + 2, sizeof(*BufZ));
-                if (!BufZ)
-                    return FALSE;
-                *Buf = BufZ;
-                return TRUE;
-            }
-            if (i == Len)
-            {
-                /* Missing list terminator. */
-                PZZWSTR BufZ = ReZallocArray(*Buf, (SIZE_T)Len + 1, sizeof(*BufZ));
-                if (!BufZ)
-                    return FALSE;
-                *Buf = BufZ;
-                return TRUE;
-            }
-            if (!(*Buf)[i])
-                return TRUE;
-        }
-    }
-
-    /* Sanitize REG_SZ/REG_EXPAND_SZ and append a list terminator to make a multi-string. */
-    if (!RegistryGetString(Buf, Len, ValueType))
-        return FALSE;
-    Len = (DWORD)wcslen(*Buf) + 1;
-    PZZWSTR BufZ = ReZallocArray(*Buf, (SIZE_T)Len + 1, sizeof(WCHAR));
-    if (!BufZ)
-        return FALSE;
-    *Buf = BufZ;
-    return TRUE;
-}
-
 _Must_inspect_result_
 static _Return_type_success_(return != NULL)
 _Post_maybenull_

@@ -1,18 +1,14 @@
 LIBRARY wireguard.dll
 EXPORTS
 	WireGuardCreateAdapter
-	WireGuardDeleteAdapter
-	WireGuardDeletePoolDriver
-	WireGuardEnumAdapters
-	WireGuardFreeAdapter
 	WireGuardOpenAdapter
+	WireGuardCloseAdapter
 	WireGuardGetAdapterLUID
-	WireGuardGetAdapterName
 	WireGuardGetAdapterState
 	WireGuardGetConfiguration
 	WireGuardGetRunningDriverVersion
+	WireGuardDeleteDriver
 	WireGuardSetAdapterLogging
-	WireGuardSetAdapterName
 	WireGuardSetAdapterState
 	WireGuardSetConfiguration
 	WireGuardSetLogger

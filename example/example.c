@@ -18,15 +18,11 @@
 #include "wireguard.h"
 
 static WIREGUARD_CREATE_ADAPTER_FUNC *WireGuardCreateAdapter;
-static WIREGUARD_DELETE_ADAPTER_FUNC *WireGuardDeleteAdapter;
-static WIREGUARD_DELETE_POOL_DRIVER_FUNC *WireGuardDeletePoolDriver;
-static WIREGUARD_ENUM_ADAPTERS_FUNC *WireGuardEnumAdapters;
-static WIREGUARD_FREE_ADAPTER_FUNC *WireGuardFreeAdapter;
 static WIREGUARD_OPEN_ADAPTER_FUNC *WireGuardOpenAdapter;
+static WIREGUARD_CLOSE_ADAPTER_FUNC *WireGuardCloseAdapter;
 static WIREGUARD_GET_ADAPTER_LUID_FUNC *WireGuardGetAdapterLUID;
-static WIREGUARD_GET_ADAPTER_NAME_FUNC *WireGuardGetAdapterName;
-static WIREGUARD_SET_ADAPTER_NAME_FUNC *WireGuardSetAdapterName;
 static WIREGUARD_GET_RUNNING_DRIVER_VERSION_FUNC *WireGuardGetRunningDriverVersion;
+static WIREGUARD_DELETE_DRIVER_FUNC *WireGuardDeleteDriver;
 static WIREGUARD_SET_LOGGER_FUNC *WireGuardSetLogger;
 static WIREGUARD_SET_ADAPTER_LOGGING_FUNC *WireGuardSetAdapterLogging;
 static WIREGUARD_GET_ADAPTER_STATE_FUNC *WireGuardGetAdapterState;
@@ -43,15 +39,11 @@ InitializeWireGuardNT(void)
         return NULL;
 #define X(Name, Type) ((Name = (Type *)GetProcAddress(WireGuardDll, #Name)) == NULL)
     if (X(WireGuardCreateAdapter, WIREGUARD_CREATE_ADAPTER_FUNC) ||
-        X(WireGuardDeleteAdapter, WIREGUARD_DELETE_ADAPTER_FUNC) ||
-        X(WireGuardDeletePoolDriver, WIREGUARD_DELETE_POOL_DRIVER_FUNC) ||
-        X(WireGuardEnumAdapters, WIREGUARD_ENUM_ADAPTERS_FUNC) ||
-        X(WireGuardFreeAdapter, WIREGUARD_FREE_ADAPTER_FUNC) || X(WireGuardOpenAdapter, WIREGUARD_OPEN_ADAPTER_FUNC) ||
+        X(WireGuardOpenAdapter, WIREGUARD_OPEN_ADAPTER_FUNC) ||
+        X(WireGuardCloseAdapter, WIREGUARD_CLOSE_ADAPTER_FUNC) ||
         X(WireGuardGetAdapterLUID, WIREGUARD_GET_ADAPTER_LUID_FUNC) ||
-        X(WireGuardGetAdapterName, WIREGUARD_GET_ADAPTER_NAME_FUNC) ||
-        X(WireGuardSetAdapterName, WIREGUARD_SET_ADAPTER_NAME_FUNC) ||
         X(WireGuardGetRunningDriverVersion, WIREGUARD_GET_RUNNING_DRIVER_VERSION_FUNC) ||
-        X(WireGuardSetLogger, WIREGUARD_SET_LOGGER_FUNC) ||
+        X(WireGuardDeleteDriver, WIREGUARD_DELETE_DRIVER_FUNC) || X(WireGuardSetLogger, WIREGUARD_SET_LOGGER_FUNC) ||
         X(WireGuardSetAdapterLogging, WIREGUARD_SET_ADAPTER_LOGGING_FUNC) ||
         X(WireGuardGetAdapterState, WIREGUARD_GET_ADAPTER_STATE_FUNC) ||
         X(WireGuardSetAdapterState, WIREGUARD_SET_ADAPTER_STATE_FUNC) ||
@@ -228,15 +220,6 @@ CtrlHandler(_In_ DWORD CtrlType)
     return FALSE;
 }
 
-static BOOL CALLBACK
-PrintAdapter(_In_ WIREGUARD_ADAPTER_HANDLE Adapter, _In_ LPARAM Param)
-{
-    WCHAR szAdapterName[MAX_ADAPTER_NAME];
-    if (WireGuardGetAdapterName(Adapter, szAdapterName))
-        Log(WIREGUARD_LOG_INFO, L"Existing WireGuard adapter: %s", szAdapterName);
-    return TRUE;
-}
-
 _Return_type_success_(return != FALSE)
 static BOOL
 TalkToDemoServer(
@@ -295,7 +278,6 @@ int __cdecl main(void)
     }
     WireGuardSetLogger(ConsoleLogger);
     Log(WIREGUARD_LOG_INFO, L"WireGuardNT library loaded");
-    WireGuardEnumAdapters(L"Example", PrintAdapter, 0);
 
     struct
     {
@@ -370,15 +352,7 @@ int __cdecl main(void)
     }
 
     GUID ExampleGuid = { 0xdeadc001, 0xbeef, 0xbabe, { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef } };
-    WIREGUARD_ADAPTER_HANDLE Adapter = WireGuardOpenAdapter(L"Example", L"Demo");
-    if (Adapter && !WireGuardDeleteAdapter(Adapter))
-    {
-        LastError = GetLastError();
-        LogError(L"Failed to delete already existing adapter", LastError);
-        goto cleanupQuit;
-    }
-    WireGuardFreeAdapter(Adapter);
-    Adapter = WireGuardCreateAdapter(L"Example", L"Demo", &ExampleGuid);
+    WIREGUARD_ADAPTER_HANDLE Adapter = WireGuardCreateAdapter(L"Demo", L"Example", &ExampleGuid);
     if (!Adapter)
     {
         LastError = GetLastError();
@@ -466,8 +440,7 @@ int __cdecl main(void)
     } while (WaitForSingleObject(QuitEvent, 1000) == WAIT_TIMEOUT);
 
 cleanupAdapter:
-    WireGuardDeleteAdapter(Adapter);
-    WireGuardFreeAdapter(Adapter);
+    WireGuardCloseAdapter(Adapter);
 cleanupQuit:
     SetConsoleCtrlHandler(CtrlHandler, FALSE);
     CloseHandle(QuitEvent);

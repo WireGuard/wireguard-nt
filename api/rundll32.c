@@ -15,131 +15,6 @@
 #include <objbase.h>
 #include <assert.h>
 
-#ifdef ACCEPT_WOW64
-
-#    define EXPORT comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
-
-static DWORD
-WriteFormatted(_In_ DWORD StdHandle, _In_z_ LPCWSTR Template, ...)
-{
-    LPWSTR FormattedMessage = NULL;
-    DWORD Size;
-    va_list Arguments;
-    va_start(Arguments, Template);
-    DWORD Len = FormatMessageW(
-        FORMAT_MESSAGE_FROM_STRING | FORMAT_MESSAGE_ALLOCATE_BUFFER,
-        Template,
-        0,
-        0,
-        (VOID *)&FormattedMessage,
-        0,
-        &Arguments);
-    if (SUCCEEDED(DWordMult(Len, sizeof(*FormattedMessage), &Size)))
-        WriteFile(GetStdHandle(StdHandle), FormattedMessage, Size, &Size, NULL);
-    else
-        Size = 0;
-    LocalFree(FormattedMessage);
-    va_end(Arguments);
-    return Size / sizeof(*FormattedMessage);
-}
-
-static VOID CALLBACK
-ConsoleLogger(_In_ WIREGUARD_LOGGER_LEVEL Level, _In_ DWORD64 Timestamp, _In_z_ LPCWSTR LogLine)
-{
-    LPCWSTR Template;
-    switch (Level)
-    {
-    case WIREGUARD_LOG_INFO:
-        Template = L"[+ %1!I64u!] %2\n";
-        break;
-    case WIREGUARD_LOG_WARN:
-        Template = L"[- %1!I64u!] %2\n";
-        break;
-    case WIREGUARD_LOG_ERR:
-        Template = L"[! %1!I64u!] %2\n";
-        break;
-    default:
-        return;
-    }
-    WriteFormatted(STD_ERROR_HANDLE, Template, Timestamp, LogLine);
-}
-
-VOID __stdcall CreateAdapter(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
-{
-#    pragma EXPORT
-
-    int Argc;
-    LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
-    WireGuardSetLogger(ConsoleLogger);
-
-    if (Argc < 4)
-        goto cleanup;
-    if (wcslen(Argv[2]) >= WIREGUARD_MAX_POOL)
-        goto cleanup;
-    if (wcslen(Argv[3]) >= MAX_ADAPTER_NAME)
-        goto cleanup;
-    GUID RequestedGUID;
-    if (Argc > 4 && FAILED(CLSIDFromString(Argv[4], &RequestedGUID)))
-        goto cleanup;
-
-    WIREGUARD_ADAPTER *Adapter =
-        WireGuardCreateAdapter(Argv[2], Argv[3], Argc > 4 ? &RequestedGUID : NULL);
-    DWORD LastError = Adapter ? ERROR_SUCCESS : GetLastError();
-    WriteFormatted(
-        STD_OUTPUT_HANDLE, L"%1!X! %2!s!", LastError, Adapter ? Adapter->DevInstanceID : L"\"\"");
-    if (Adapter)
-        WireGuardFreeAdapter(Adapter);
-
-cleanup:
-    LocalFree(Argv);
-}
-
-VOID __stdcall DeleteAdapter(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
-{
-#    pragma EXPORT
-
-    int Argc;
-    LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
-    WireGuardSetLogger(ConsoleLogger);
-
-    if (Argc < 3)
-        goto cleanup;
-
-    DWORD LastError;
-    WIREGUARD_ADAPTER *Adapter = AdapterOpenFromDevInstanceId(Argv[2], Argv[3]);
-    if (!Adapter)
-    {
-        LastError = GetLastError();
-        goto write;
-    }
-    LastError = WireGuardDeleteAdapter(Adapter) ? ERROR_SUCCESS : GetLastError();
-    WireGuardFreeAdapter(Adapter);
-write:
-    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X!", LastError);
-
-cleanup:
-    LocalFree(Argv);
-}
-
-VOID __stdcall DeletePoolDriver(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
-{
-#    pragma EXPORT
-
-    int Argc;
-    LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
-    WireGuardSetLogger(ConsoleLogger);
-
-    if (Argc < 2)
-        goto cleanup;
-
-    DWORD LastError = WireGuardDeletePoolDriver(Argv[2]) ? ERROR_SUCCESS : GetLastError();
-    WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X!", LastError);
-
-cleanup:
-    LocalFree(Argv);
-}
-#endif
-
 #ifdef MAYBE_WOW64
 
 _Return_type_success_(return != FALSE)
@@ -311,7 +186,7 @@ ExecuteRunDll32(
         return FALSE;
     }
     WCHAR DllPath[MAX_PATH] = { 0 };
-    if (!PathCombineW(DllPath, RandomTempSubDirectory, L"wireguard.dll"))
+    if (!PathCombineW(DllPath, RandomTempSubDirectory, L"setupapihost.dll"))
     {
         LastError = ERROR_BUFFER_OVERFLOW;
         goto cleanupDirectory;
@@ -320,10 +195,10 @@ ExecuteRunDll32(
     switch (NativeMachine)
     {
     case IMAGE_FILE_MACHINE_AMD64:
-        WireGuardDllResourceName = L"wireguard-amd64.dll";
+        WireGuardDllResourceName = L"setupapihost-amd64.dll";
         break;
     case IMAGE_FILE_MACHINE_ARM64:
-        WireGuardDllResourceName = L"wireguard-arm64.dll";
+        WireGuardDllResourceName = L"setupapihost-arm64.dll";
         break;
     default:
         LOG(WIREGUARD_LOG_ERR, L"Unsupported platform 0x%x", NativeMachine);
@@ -412,9 +287,9 @@ cleanupThreads:
         WaitForSingleObject(ThreadStdout, INFINITE);
         DWORD ThreadResult;
         if (!GetExitCodeThread(ThreadStdout, &ThreadResult))
-            LOG_LAST_ERROR(L"Failed to retrieve stdout reader result");
+            LastError = LOG_LAST_ERROR(L"Failed to retrieve stdout reader result");
         else if (ThreadResult != ERROR_SUCCESS)
-            LOG_ERROR(LastError, L"Failed to read process output");
+            LastError = LOG_ERROR(ThreadResult, L"Failed to read process output");
         CloseHandle(ThreadStdout);
     }
 cleanupPipes:
@@ -430,83 +305,37 @@ cleanupDirectory:
     return RET_ERROR(TRUE, LastError);
 }
 
-_Use_decl_annotations_
-WIREGUARD_ADAPTER *
-CreateAdapterViaRundll32(LPCWSTR Pool, LPCWSTR Name, const GUID *RequestedGUID)
-{
-    LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
-    LPWSTR Arguments = NULL;
-    if (RequestedGUID)
-    {
-        WCHAR RequestedGUIDStr[MAX_GUID_STRING_LEN];
-        if (StringFromGUID2(RequestedGUID, RequestedGUIDStr, _countof(RequestedGUIDStr)))
-            Arguments = ArgvToCommandLineW(3, Pool, Name, RequestedGUIDStr);
-    }
-    else
-        Arguments = ArgvToCommandLineW(2, Pool, Name);
-    if (!Arguments)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Command line too long");
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return NULL;
-    }
-    WIREGUARD_ADAPTER *Adapter = NULL;
-    DWORD LastError;
-    WCHAR Response[8 + 1 + MAX_GUID_STRING_LEN + 1 + 8 + 1];
-    if (!ExecuteRunDll32(L"CreateAdapter", Arguments, Response, _countof(Response)))
-    {
-        LastError = GetLastError();
-        LOG(WIREGUARD_LOG_ERR, L"Error executing worker process: %s", Arguments);
-        goto cleanupArguments;
-    }
-    int Argc;
-    LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 2)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
-        LastError = ERROR_INVALID_PARAMETER;
-        goto cleanupArgv;
-    }
-    LastError = wcstoul(Argv[0], NULL, 16);
-    if (LastError == ERROR_SUCCESS && (Adapter = AdapterOpenFromDevInstanceId(Pool, Argv[1])) == NULL)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Failed to get adapter %s", Argv[1]);
-        LastError = ERROR_FILE_NOT_FOUND;
-    }
-cleanupArgv:
-    LocalFree(Argv);
-cleanupArguments:
-    Free(Arguments);
-    SetLastError(LastError);
-    return Adapter;
-}
-
-_Use_decl_annotations_
+static _Return_type_success_(return != FALSE)
 BOOL
-DeleteAdapterViaRundll32(const WIREGUARD_ADAPTER *Adapter)
+InvokeClassInstaller(_In_ LPCWSTR Action, _In_ LPCWSTR Function, _In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData)
 {
-    LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
-    LPWSTR Arguments = ArgvToCommandLineW(2, Adapter->Pool, Adapter->DevInstanceID);
-    if (!Arguments)
+    LOG(WIREGUARD_LOG_INFO, L"Spawning native process to %s instance", Action);
+
+    WCHAR InstanceId[MAX_INSTANCE_ID];
+    DWORD RequiredChars = _countof(InstanceId);
+    if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, RequiredChars, &RequiredChars))
     {
-        LOG(WIREGUARD_LOG_ERR, L"Command line too long");
-        SetLastError(ERROR_INVALID_PARAMETER);
+        LOG_LAST_ERROR(L"Failed to get adapter instance ID");
         return FALSE;
     }
-    WCHAR Response[8 + 1 + 8 + 1];
-    DWORD LastError;
-    if (!ExecuteRunDll32(L"DeleteAdapter", Arguments, Response, _countof(Response)))
+    LPWSTR Arguments = ArgvToCommandLineW(1, InstanceId);
+    if (!Arguments)
     {
-        LastError = GetLastError();
-        LOG(WIREGUARD_LOG_ERR, L"Error executing worker process: %s", Arguments);
+        SetLastError(LOG_ERROR(ERROR_INVALID_PARAMETER, L"Command line too long"));
+        return FALSE;
+    }
+    DWORD LastError;
+    WCHAR Response[8 + 1];
+    if (!ExecuteRunDll32(Function, Arguments, Response, _countof(Response)))
+    {
+        LastError = LOG_LAST_ERROR(L"Error executing worker process: %s", Arguments);
         goto cleanupArguments;
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
     if (Argc < 1)
     {
-        LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
-        LastError = ERROR_INVALID_PARAMETER;
+        LastError = LOG_ERROR(ERROR_INVALID_PARAMETER, L"Incomplete response: %s", Response);
         goto cleanupArgv;
     }
     LastError = wcstoul(Argv[0], NULL, 16);
@@ -519,37 +348,51 @@ cleanupArguments:
 
 _Use_decl_annotations_
 BOOL
-DeletePoolDriverViaRundll32(LPCWSTR Pool)
+RemoveInstanceViaRundll32(HDEVINFO DevInfo, SP_DEVINFO_DATA *DevInfoData)
 {
-    LOG(WIREGUARD_LOG_INFO, L"Spawning native process");
-    LPWSTR Arguments = ArgvToCommandLineW(1, Pool);
-    if (!Arguments)
-    {
-        LOG(WIREGUARD_LOG_ERR, L"Command line too long");
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return FALSE;
-    }
-    WCHAR Response[8 + 1 + 8 + 1];
+    return InvokeClassInstaller(L"remove", L"RemoveInstance", DevInfo, DevInfoData);
+}
+
+_Use_decl_annotations_
+BOOL
+EnableInstanceViaRundll32(HDEVINFO DevInfo, SP_DEVINFO_DATA *DevInfoData)
+{
+    return InvokeClassInstaller(L"enable", L"EnableInstance", DevInfo, DevInfoData);
+}
+
+_Use_decl_annotations_
+BOOL
+DisableInstanceViaRundll32(HDEVINFO DevInfo, SP_DEVINFO_DATA *DevInfoData)
+{
+    return InvokeClassInstaller(L"disable", L"DisableInstance", DevInfo, DevInfoData);
+}
+
+_Use_decl_annotations_
+BOOL
+CreateInstanceWin7ViaRundll32(LPWSTR InstanceId)
+{
+    LOG(WIREGUARD_LOG_INFO, L"Spawning native process to create instance");
+
     DWORD LastError;
-    if (!ExecuteRunDll32(L"DeletePoolDriver", Arguments, Response, _countof(Response)))
+    WCHAR Response[MAX_INSTANCE_ID + 1];
+    if (!ExecuteRunDll32(L"CreateInstanceWin7", L"", Response, _countof(Response)))
     {
-        LastError = GetLastError();
-        LOG(WIREGUARD_LOG_ERR, L"Error executing worker process: %s", Arguments);
-        goto cleanupArguments;
+        LastError = LOG_LAST_ERROR(L"Error executing worker process");
+        goto cleanup;
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 1)
+    if (Argc < 2)
     {
-        LOG(WIREGUARD_LOG_ERR, L"Incomplete response: %s", Response);
-        LastError = ERROR_INVALID_PARAMETER;
+        LastError = LOG_ERROR(ERROR_INVALID_PARAMETER, L"Incomplete response: %s", Response);
         goto cleanupArgv;
     }
     LastError = wcstoul(Argv[0], NULL, 16);
+    if (LastError == ERROR_SUCCESS)
+        wcsncpy_s(InstanceId, MAX_INSTANCE_ID, Argv[1], _TRUNCATE);
 cleanupArgv:
     LocalFree(Argv);
-cleanupArguments:
-    Free(Arguments);
+cleanup:
     return RET_ERROR(TRUE, LastError);
 }
 #endif
