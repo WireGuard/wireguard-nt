@@ -34,11 +34,17 @@ Include = wireguard-instanceid.inf
 Needs = WireGuard.NetSetup
 Characteristics = 0x1 ; NCF_VIRTUAL
 AddReg = WireGuard.Ndi
+AddProperty = WireGuard.Properties
 CopyFiles = WireGuard.CopyFiles.Sys
 *IfType = 53 ; IF_TYPE_PROP_VIRTUAL
 *MediaType = 19 ; NdisMediumIP
 *PhysicalMediaType = 0 ; NdisPhysicalMediumUnspecified
 EnableDhcp = 0 ; Disable DHCP
+
+[WireGuard.Properties]
+DeviceIcon,,,,"%12%\wireguard.sys,-7"
+DeviceBrandingIcon,,,,"%12%\wireguard.sys,-7"
+DeviceVendorWebsite,,,,"https://www.wireguard.com/"
 
 [WireGuard.Install.Services]
 AddService = WireGuard, 2, WireGuard.Service, WireGuard.EventLog ; 2=SPSVCINST_ASSOCSERVICE
