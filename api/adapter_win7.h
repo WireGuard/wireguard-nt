@@ -308,3 +308,36 @@ VOID AdapterCleanupOrphanedDevicesWin7(VOID)
     }
     SetupDiDestroyDeviceInfoList(DevInfo);
 }
+
+VOID AdapterCleanupLegacyDevices(VOID)
+{
+    HDEVINFO DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, L"ROOT\\NET", NULL, 0, NULL, NULL, NULL);
+    if (DevInfo == INVALID_HANDLE_VALUE)
+        return;
+    SP_DEVINFO_DATA DevInfoData = { .cbSize = sizeof(DevInfoData) };
+    for (DWORD EnumIndex = 0;; ++EnumIndex)
+    {
+        if (!SetupDiEnumDeviceInfo(DevInfo, EnumIndex, &DevInfoData))
+        {
+            if (GetLastError() == ERROR_NO_MORE_ITEMS)
+                break;
+            continue;
+        }
+        WCHAR HardwareIDs[0x400] = { 0 };
+        DWORD ValueType, Size = sizeof(HardwareIDs) - sizeof(HardwareIDs[0]);
+        if (!SetupDiGetDeviceRegistryPropertyW(
+                DevInfo, &DevInfoData, SPDRP_HARDWAREID, &ValueType, (PBYTE)HardwareIDs, Size, &Size) ||
+            Size > sizeof(HardwareIDs) - sizeof(HardwareIDs[0]))
+            continue;
+        Size /= sizeof(HardwareIDs[0]);
+        for (WCHAR *P = HardwareIDs; P < HardwareIDs + Size; P += wcslen(P) + 1)
+        {
+            if (!_wcsicmp(P, WIREGUARD_HWID))
+            {
+                AdapterRemoveInstance(DevInfo, &DevInfoData);
+                break;
+            }
+        }
+    }
+    SetupDiDestroyDeviceInfoList(DevInfo);
+}

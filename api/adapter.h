@@ -89,6 +89,11 @@ AdapterGetDeviceObjectFileName(_In_z_ LPCWSTR InstanceId);
 VOID AdapterCleanupOrphanedDevices(VOID);
 
 /**
+ * Cleans up adapters that use the old enumerator.
+ */
+VOID AdapterCleanupLegacyDevices(VOID);
+
+/**
  * Removes the specified device instance.
  *
  * @param DevInfo      Device info handle from SetupAPI.
