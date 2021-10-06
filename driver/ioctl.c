@@ -585,78 +585,6 @@ ReadLogLine(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         Irp->IoStatus.Information = sizeof(WG_IOCTL_LOG_ENTRY);
 }
 
-static KSTART_ROUTINE ForceCloseHandlesAfterDelay;
-_Use_decl_annotations_
-static VOID
-ForceCloseHandlesAfterDelay(PVOID StartContext)
-{
-    WG_DEVICE *Wg = StartContext;
-    DEVICE_OBJECT *DeviceObject;
-    NTSTATUS Status;
-    PEPROCESS Process;
-    KAPC_STATE ApcState;
-    PVOID Object = NULL;
-    ULONG VerifierFlags = 0;
-    OBJECT_HANDLE_INFORMATION HandleInfo;
-    SYSTEM_HANDLE_INFORMATION_EX *HandleTable = NULL;
-
-    if (KeWaitForSingleObject(
-            &Wg->DeviceRemoved,
-            Executive,
-            KernelMode,
-            FALSE,
-            &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(5) }) != STATUS_TIMEOUT)
-        return;
-
-    DeviceObject = Wg->FunctionalDeviceObject;
-    if (!DeviceObject)
-        return;
-
-    LogWarn(Wg, "Force closing all adapter handles after having waited 5 seconds");
-
-    MmIsVerifierEnabled(&VerifierFlags);
-
-    for (ULONG Size = 0, RequestedSize;
-         (Status = ZwQuerySystemInformation(SystemExtendedHandleInformation, HandleTable, Size, &RequestedSize)) ==
-         STATUS_INFO_LENGTH_MISMATCH;
-         Size = RequestedSize)
-    {
-        if (HandleTable)
-            MemFree(HandleTable);
-        HandleTable = MemAllocate(RequestedSize);
-        if (!HandleTable)
-            return;
-    }
-    if (!NT_SUCCESS(Status) || !HandleTable)
-        goto cleanup;
-
-    for (ULONG_PTR Index = 0; Index < HandleTable->NumberOfHandles; ++Index)
-    {
-        FILE_OBJECT *FileObject = HandleTable->Handles[Index].Object;
-        if (!FileObject || FileObject->Type != 5 || FileObject->DeviceObject != DeviceObject)
-            continue;
-        Status = PsLookupProcessByProcessId(HandleTable->Handles[Index].UniqueProcessId, &Process);
-        if (!NT_SUCCESS(Status))
-            continue;
-        KeStackAttachProcess(Process, &ApcState);
-        if (!VerifierFlags)
-            Status = ObReferenceObjectByHandle(
-                HandleTable->Handles[Index].HandleValue, 0, NULL, UserMode, &Object, &HandleInfo);
-        if (NT_SUCCESS(Status))
-        {
-            if (VerifierFlags || Object == FileObject)
-                ObCloseHandle(HandleTable->Handles[Index].HandleValue, UserMode);
-            if (!VerifierFlags)
-                ObfDereferenceObject(Object);
-        }
-        KeUnstackDetachProcess(&ApcState);
-        ObfDereferenceObject(Process);
-    }
-cleanup:
-    if (HandleTable)
-        MemFree(HandleTable);
-}
-
 _Dispatch_type_(IRP_MJ_DEVICE_CONTROL)
 static DRIVER_DISPATCH_PAGED DispatchDeviceControl;
 _Use_decl_annotations_
@@ -718,17 +646,6 @@ DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
     WriteBooleanNoFence(&Wg->IsDeviceRemoving, TRUE);
     KeSetEvent(&Wg->Log.NewEntry, IO_NO_INCREMENT, FALSE);
 
-    OBJECT_ATTRIBUTES ObjectAttributes;
-    InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
-    HANDLE Handle;
-    if (NT_SUCCESS(PsCreateSystemThread(
-            &Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, ForceCloseHandlesAfterDelay, Wg)))
-    {
-#pragma warning(suppress : 28126) /* Handle is a kernel handle. */
-        ObReferenceObjectByHandle(Handle, SYNCHRONIZE, NULL, KernelMode, &Wg->HandleForceCloseThread, NULL);
-        ZwClose(Handle);
-    }
-
 ndisDispatch:
     return NdisDispatchPnp(DeviceObject, Irp);
 }
@@ -739,12 +656,6 @@ IoctlHalt(WG_DEVICE *Wg)
 {
     WritePointerNoFence(&Wg->FunctionalDeviceObject->Reserved, NULL);
     KeSetEvent(&Wg->DeviceRemoved, IO_NETWORK_INCREMENT, FALSE);
-    if (Wg->HandleForceCloseThread)
-    {
-        KeWaitForSingleObject(Wg->HandleForceCloseThread, Executive, KernelMode, FALSE, NULL);
-        ObDereferenceObject(Wg->HandleForceCloseThread);
-        Wg->HandleForceCloseThread = NULL;
-    }
 }
 
 #ifdef ALLOC_PRAGMA

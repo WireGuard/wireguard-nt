@@ -94,7 +94,6 @@ typedef struct _WG_DEVICE
     LOG_RING Log;
     LIST_ENTRY DeviceList;
     KEVENT DeviceRemoved;
-    PKTHREAD HandleForceCloseThread;
 } WG_DEVICE;
 
 _Requires_lock_held_(Wg->DeviceUpdateLock)
