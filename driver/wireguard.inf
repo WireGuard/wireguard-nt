@@ -30,8 +30,6 @@ wireguard.sys, , , 0x00004002 ; COPYFLG_IN_USE_RENAME | COPYFLG_NOSKIP
 %WireGuard.DeviceDesc% = WireGuard.Install, WireGuard
 
 [WireGuard.Install]
-Include = wireguard-instanceid.inf
-Needs = WireGuard.NetSetup
 Characteristics = 0x1 ; NCF_VIRTUAL
 AddReg = WireGuard.Ndi
 AddProperty = WireGuard.Properties

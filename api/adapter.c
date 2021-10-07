@@ -537,15 +537,6 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
         goto cleanup;
     }
 
-    WCHAR InstanceIdInf[MAX_PATH];
-    if (!GetWindowsDirectoryW(InstanceIdInf, _countof(InstanceIdInf)) ||
-        !PathAppend(InstanceIdInf, L"INF\\wireguard-instanceid.inf"))
-    {
-        LastError = LOG_ERROR(ERROR_BUFFER_OVERFLOW, L"Failed to construct INF path");
-        goto cleanupDeviceInstallationMutex;
-    }
-    DeleteFileW(InstanceIdInf);
-
     HDEVINFO DevInfoExistingAdapters;
     SP_DEVINFO_DATA_LIST *ExistingAdapters;
     if (!DriverInstall(&DevInfoExistingAdapters, &ExistingAdapters))
@@ -559,66 +550,6 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
     Adapter = Zalloc(sizeof(*Adapter));
     if (!Adapter)
         goto cleanupDriverInstall;
-
-    if (RequestedGUID)
-    {
-        HANDLE InstanceIdFile = CreateFileW(
-            InstanceIdInf,
-            GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            NULL,
-            CREATE_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL,
-            NULL);
-        if (InstanceIdFile == INVALID_HANDLE_VALUE)
-        {
-            LastError = LOG_LAST_ERROR(L"Failed to open %s for writing", InstanceIdInf);
-            goto cleanupDriverInstall;
-        }
-        static const WCHAR InfTemplate[] =
-            L"[Version]\r\n"
-            L"Signature = \"$Windows NT$\"\r\n"
-            L"[WireGuard.NetSetup]\r\n"
-            L"AddReg = WireGuard.SuggestedInstanceId\r\n"
-            L"[WireGuard.SuggestedInstanceId]\r\n"
-            L"HKR,,SuggestedInstanceId,1,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%02X\r\n";
-        WCHAR InfContents[_countof(InfTemplate)];
-        BYTE *P = (BYTE *)RequestedGUID;
-        _snwprintf_s(
-            InfContents,
-            _countof(InfContents),
-            _TRUNCATE,
-            InfTemplate,
-            P[0],
-            P[1],
-            P[2],
-            P[3],
-            P[4],
-            P[5],
-            P[6],
-            P[7],
-            P[8],
-            P[9],
-            P[10],
-            P[11],
-            P[12],
-            P[13],
-            P[14],
-            P[15]);
-        DWORD BytesWritten;
-        if (!WriteFile(
-                InstanceIdFile,
-                InfContents,
-                (DWORD)(wcslen(InfContents) * sizeof(InfContents[0])),
-                &BytesWritten,
-                NULL))
-        {
-            LastError = LOG_LAST_ERROR(L"Failed to write bytes to %s", InstanceIdInf);
-            CloseHandle(InstanceIdFile);
-            goto cleanupInstanceIdFile;
-        }
-        CloseHandle(InstanceIdFile);
-    }
 
     WCHAR TunnelTypeName[MAX_ADAPTER_NAME + 8];
     if (_snwprintf_s(TunnelTypeName, _countof(TunnelTypeName), _TRUNCATE, L"%s Tunnel", TunnelType) == -1)
@@ -649,28 +580,6 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
         LastError = LOG_ERROR(HRet, L"Failed to convert GUID");
         goto cleanupAdapter;
     }
-    static const WCHAR Hwids[_countof(WIREGUARD_HWID) + 1 /*Multi-string terminator*/] = WIREGUARD_HWID;
-    SW_DEVICE_CREATE_INFO CreateInfo = { .cbSize = sizeof(CreateInfo),
-                                         .pszInstanceId = InstanceIdStr,
-                                         .pszzHardwareIds = Hwids,
-                                         .pszzCompatibleIds = Hwids,
-                                         .CapabilityFlags =
-                                             SWDeviceCapabilitiesSilentInstall | SWDeviceCapabilitiesDriverRequired,
-                                         .pszDeviceDescription = TunnelTypeName };
-    DEVPROPERTY DeviceProperties[] = {
-        { .CompKey = { .Key = DEVPKEY_WireGuard_Name, .Store = DEVPROP_STORE_SYSTEM },
-          .Type = DEVPROP_TYPE_STRING,
-          .Buffer = (WCHAR *)Name,
-          .BufferSize = (ULONG)((wcslen(Name) + 1) * sizeof(*Name)) },
-        { .CompKey = { .Key = DEVPKEY_Device_FriendlyName, .Store = DEVPROP_STORE_SYSTEM },
-          .Type = DEVPROP_TYPE_STRING,
-          .Buffer = TunnelTypeName,
-          .BufferSize = (ULONG)((wcslen(TunnelTypeName) + 1) * sizeof(*TunnelTypeName)) },
-        { .CompKey = { .Key = DEVPKEY_Device_DeviceDesc, .Store = DEVPROP_STORE_SYSTEM },
-          .Type = DEVPROP_TYPE_STRING,
-          .Buffer = TunnelTypeName,
-          .BufferSize = (ULONG)((wcslen(TunnelTypeName) + 1) * sizeof(*TunnelTypeName)) }
-    };
     SW_DEVICE_CREATE_CTX CreateContext = { .DeviceInstanceId = Adapter->DevInstanceID,
                                            .Triggered = CreateEventW(NULL, FALSE, FALSE, NULL) };
     if (!CreateContext.Triggered)
@@ -688,6 +597,89 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
         }
         goto resumeAfterInstanceId;
     }
+    SW_DEVICE_CREATE_INFO StubCreateInfo = { .cbSize = sizeof(StubCreateInfo),
+                                             .pszInstanceId = InstanceIdStr,
+                                             .pszzHardwareIds = L"",
+                                             .CapabilityFlags =
+                                                 SWDeviceCapabilitiesSilentInstall | SWDeviceCapabilitiesDriverRequired,
+                                             .pszDeviceDescription = TunnelTypeName };
+    DEVPROPERTY StubDeviceProperties[] = { { .CompKey = { .Key = DEVPKEY_Device_ClassGuid,
+                                                          .Store = DEVPROP_STORE_SYSTEM },
+                                             .Type = DEVPROP_TYPE_GUID,
+                                             .Buffer = (PVOID)&GUID_DEVCLASS_NET,
+                                             .BufferSize = sizeof(GUID_DEVCLASS_NET) } };
+    HRet = SwDeviceCreate(
+        WIREGUARD_HWID,
+        RootNodeName,
+        &StubCreateInfo,
+        _countof(StubDeviceProperties),
+        StubDeviceProperties,
+        DeviceCreateCallback,
+        &CreateContext,
+        &Adapter->SwDevice);
+    if (FAILED(HRet))
+    {
+        LastError = LOG_ERROR(HRet, L"Failed to initiate stub device creation");
+        goto cleanupCreateContext;
+    }
+    if (WaitForSingleObject(CreateContext.Triggered, INFINITE) != WAIT_OBJECT_0)
+    {
+        LastError = LOG_LAST_ERROR(L"Failed to wait for stub device creation trigger");
+        goto cleanupCreateContext;
+    }
+    if (FAILED(CreateContext.CreateResult))
+    {
+        LastError = LOG_ERROR(CreateContext.CreateResult, L"Failed to create stub device");
+        goto cleanupCreateContext;
+    }
+    DEVINST DevInst;
+    CONFIGRET CRet = CM_Locate_DevNodeW(&DevInst, Adapter->DevInstanceID, CM_LOCATE_DEVNODE_PHANTOM);
+    if (CRet != CR_SUCCESS)
+    {
+        LastError =
+            LOG_ERROR(CM_MapCrToWin32Err(CRet, ERROR_DEVICE_ENUMERATION_ERROR), L"Failed to make stub device list");
+        goto cleanupCreateContext;
+    }
+    HKEY DriverKey;
+    CRet = CM_Open_DevNode_Key(DevInst, KEY_SET_VALUE, 0, RegDisposition_OpenAlways, &DriverKey, CM_REGISTRY_SOFTWARE);
+    if (CRet != CR_SUCCESS)
+    {
+        LastError =
+            LOG_ERROR(CM_MapCrToWin32Err(CRet, ERROR_PNP_REGISTRY_ERROR), L"Failed to create software registry key");
+        goto cleanupCreateContext;
+    }
+    LastError =
+        RegSetValueExW(DriverKey, L"SuggestedInstanceId", 0, REG_BINARY, (const BYTE *)&InstanceId, sizeof(InstanceId));
+    RegCloseKey(DriverKey);
+    if (LastError != ERROR_SUCCESS)
+    {
+        LastError = LOG_ERROR(LastError, L"Failed to set SuggestedInstanceId to %s", InstanceIdStr);
+        goto cleanupCreateContext;
+    }
+    SwDeviceClose(Adapter->SwDevice);
+    Adapter->SwDevice = NULL;
+
+    static const WCHAR Hwids[_countof(WIREGUARD_HWID) + 1 /*Multi-string terminator*/] = WIREGUARD_HWID;
+    SW_DEVICE_CREATE_INFO CreateInfo = { .cbSize = sizeof(CreateInfo),
+                                         .pszInstanceId = InstanceIdStr,
+                                         .pszzHardwareIds = Hwids,
+                                         .CapabilityFlags =
+                                             SWDeviceCapabilitiesSilentInstall | SWDeviceCapabilitiesDriverRequired,
+                                         .pszDeviceDescription = TunnelTypeName };
+    DEVPROPERTY DeviceProperties[] = {
+        { .CompKey = { .Key = DEVPKEY_WireGuard_Name, .Store = DEVPROP_STORE_SYSTEM },
+          .Type = DEVPROP_TYPE_STRING,
+          .Buffer = (WCHAR *)Name,
+          .BufferSize = (ULONG)((wcslen(Name) + 1) * sizeof(*Name)) },
+        { .CompKey = { .Key = DEVPKEY_Device_FriendlyName, .Store = DEVPROP_STORE_SYSTEM },
+          .Type = DEVPROP_TYPE_STRING,
+          .Buffer = TunnelTypeName,
+          .BufferSize = (ULONG)((wcslen(TunnelTypeName) + 1) * sizeof(*TunnelTypeName)) },
+        { .CompKey = { .Key = DEVPKEY_Device_DeviceDesc, .Store = DEVPROP_STORE_SYSTEM },
+          .Type = DEVPROP_TYPE_STRING,
+          .Buffer = TunnelTypeName,
+          .BufferSize = (ULONG)((wcslen(TunnelTypeName) + 1) * sizeof(*TunnelTypeName)) }
+    };
 
     HRet = SwDeviceCreate(
         WIREGUARD_HWID,
@@ -783,8 +775,6 @@ resumeAfterInstanceId:
 
 cleanupCreateContext:
     CloseHandle(CreateContext.Triggered);
-cleanupInstanceIdFile:
-    DeleteFileW(InstanceIdInf);
 cleanupAdapter:
     if (LastError != ERROR_SUCCESS)
     {
@@ -818,7 +808,8 @@ WireGuardOpenAdapter(LPCWSTR Name)
     if (!Adapter)
         goto cleanupDeviceInstallationMutex;
 
-    HDEVINFO DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, DIGCF_PRESENT, NULL, NULL, NULL);
+    HDEVINFO DevInfo =
+        SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, DIGCF_PRESENT, NULL, NULL, NULL);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
         LastError = LOG_LAST_ERROR(L"Failed to get present adapters");
