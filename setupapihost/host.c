@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <delayimp.h>
 #include <setupapi.h>
+#include <devguid.h>
 #include <shellapi.h>
 #include <intsafe.h>
 #include <stdlib.h>
@@ -61,7 +62,7 @@ VOID __stdcall RemoveInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 
-    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
+    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
         LastError = GetLastError();
@@ -104,7 +105,7 @@ VOID __stdcall EnableInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 
-    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
+    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
         LastError = GetLastError();
@@ -147,7 +148,7 @@ VOID __stdcall DisableInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, in
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 
-    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
+    HDEVINFO DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
         LastError = GetLastError();

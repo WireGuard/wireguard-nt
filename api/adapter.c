@@ -595,8 +595,11 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
             LastError = GetLastError();
             goto cleanupCreateContext;
         }
-        goto resumeAfterInstanceId;
+        goto skipSwDevice;
     }
+    if (!IsWindows10)
+        goto skipStub;
+
     SW_DEVICE_CREATE_INFO StubCreateInfo = { .cbSize = sizeof(StubCreateInfo),
                                              .pszInstanceId = InstanceIdStr,
                                              .pszzHardwareIds = L"",
@@ -659,6 +662,7 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
     SwDeviceClose(Adapter->SwDevice);
     Adapter->SwDevice = NULL;
 
+skipStub:;
     static const WCHAR Hwids[_countof(WIREGUARD_HWID) + 1 /*Multi-string terminator*/] = WIREGUARD_HWID;
     SW_DEVICE_CREATE_INFO CreateInfo = { .cbSize = sizeof(CreateInfo),
                                          .pszInstanceId = InstanceIdStr,
@@ -706,29 +710,26 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
         goto cleanupCreateContext;
     }
 
-resumeAfterInstanceId:
-    Adapter->DevInfo = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
-    if (Adapter->DevInfo == INVALID_HANDLE_VALUE)
-    {
-        Adapter->DevInfo = NULL;
-        LastError = LOG_LAST_ERROR(L"Failed to make device list");
-        goto cleanupCreateContext;
-    }
-    Adapter->DevInfoData.cbSize = sizeof(Adapter->DevInfoData);
-    if (!SetupDiOpenDeviceInfoW(
-            Adapter->DevInfo, Adapter->DevInstanceID, NULL, DIOD_INHERIT_CLASSDRVS, &Adapter->DevInfoData))
-    {
-        LastError = LOG_LAST_ERROR(L"Failed to open device instance ID %s", Adapter->DevInstanceID);
-        SetupDiDestroyDeviceInfoList(Adapter->DevInfo);
-        Adapter->DevInfo = NULL;
-        goto cleanupCreateContext;
-    }
-
     if (!WaitForInterface(Adapter->DevInstanceID))
     {
+        LastError = GetLastError();
         DEVPROPTYPE PropertyType = 0;
         NTSTATUS NtStatus = 0;
         INT32 ProblemCode = 0;
+        Adapter->DevInfo = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
+        if (Adapter->DevInfo == INVALID_HANDLE_VALUE)
+        {
+            Adapter->DevInfo = NULL;
+            goto cleanupCreateContext;
+        }
+        Adapter->DevInfoData.cbSize = sizeof(Adapter->DevInfoData);
+        if (!SetupDiOpenDeviceInfoW(
+                Adapter->DevInfo, Adapter->DevInstanceID, NULL, DIOD_INHERIT_CLASSDRVS, &Adapter->DevInfoData))
+        {
+            SetupDiDestroyDeviceInfoList(Adapter->DevInfo);
+            Adapter->DevInfo = NULL;
+            goto cleanupCreateContext;
+        }
         if (!SetupDiGetDevicePropertyW(
                 Adapter->DevInfo,
                 &Adapter->DevInfoData,
@@ -755,6 +756,24 @@ resumeAfterInstanceId:
         if (LastError == ERROR_SUCCESS)
             LastError = ERROR_DEVICE_NOT_AVAILABLE;
         LOG_ERROR(LastError, L"Failed to setup adapter (problem code: 0x%X, ntstatus: 0x%X)", ProblemCode, NtStatus);
+        goto cleanupCreateContext;
+    }
+
+skipSwDevice:
+    Adapter->DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
+    if (Adapter->DevInfo == INVALID_HANDLE_VALUE)
+    {
+        Adapter->DevInfo = NULL;
+        LastError = LOG_LAST_ERROR(L"Failed to make device list");
+        goto cleanupCreateContext;
+    }
+    Adapter->DevInfoData.cbSize = sizeof(Adapter->DevInfoData);
+    if (!SetupDiOpenDeviceInfoW(
+            Adapter->DevInfo, Adapter->DevInstanceID, NULL, DIOD_INHERIT_CLASSDRVS, &Adapter->DevInfoData))
+    {
+        LastError = LOG_LAST_ERROR(L"Failed to open device instance ID %s", Adapter->DevInstanceID);
+        SetupDiDestroyDeviceInfoList(Adapter->DevInfo);
+        Adapter->DevInfo = NULL;
         goto cleanupCreateContext;
     }
 
