@@ -406,8 +406,14 @@ DWORD WINAPI WireGuardGetRunningDriverVersion(VOID)
 static BOOL EnsureWireGuardUnloaded(VOID)
 {
     BOOL Loaded;
-    for (int i = 0; (Loaded = MaybeGetRunningDriverVersion(TRUE) != 0) != FALSE && i < 300; ++i)
-        Sleep(50);
+    for (DWORD Tries = 0; Tries < 1500; ++Tries)
+    {
+        if (Tries)
+            Sleep(50);
+        Loaded = MaybeGetRunningDriverVersion(TRUE) != 0;
+        if (!Loaded)
+            break;
+    }
     return !Loaded;
 }
 

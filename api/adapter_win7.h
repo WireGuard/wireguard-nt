@@ -25,9 +25,9 @@ WaitForInterfaceWin7(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData, _
     HKEY Key = INVALID_HANDLE_VALUE;
     HANDLE FileHandle = INVALID_HANDLE_VALUE;
     BOOLEAN Ret = FALSE;
-    for (int i = 0; i < 1500; ++i)
+    for (DWORD Tries = 0; Tries < 1500; ++Tries)
     {
-        if (i)
+        if (Tries)
             Sleep(10);
         if (Key == INVALID_HANDLE_VALUE)
             Key = SetupDiOpenDevRegKey(DevInfo, DevInfoData, DICS_FLAG_GLOBAL, 0, DIREG_DRV, KEY_QUERY_VALUE);
