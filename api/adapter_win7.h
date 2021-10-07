@@ -23,22 +23,28 @@ WaitForInterfaceWin7(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData, _
     DWORD ValType, Zero;
     WCHAR *FileName = NULL;
     HKEY Key = INVALID_HANDLE_VALUE;
+    HANDLE FileHandle = INVALID_HANDLE_VALUE;
     BOOLEAN Ret = FALSE;
     for (int i = 0; i < 1500; ++i)
     {
         if (i)
             Sleep(10);
         if (Key == INVALID_HANDLE_VALUE)
-        {
             Key = SetupDiOpenDevRegKey(DevInfo, DevInfoData, DICS_FLAG_GLOBAL, 0, DIREG_DRV, KEY_QUERY_VALUE);
-            if (Key == INVALID_HANDLE_VALUE)
-                continue;
-        }
-        _Analysis_assume_(Key);
         if (!FileName)
             FileName = AdapterGetDeviceObjectFileName(DevInstanceId);
+        if (FileName && FileHandle == INVALID_HANDLE_VALUE)
+            FileHandle = CreateFileW(
+                FileName,
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                NULL,
+                OPEN_EXISTING,
+                0,
+                NULL);
         Zero = 0;
-        if (FileName && RegQueryValueExW(Key, L"NetCfgInstanceId", NULL, &ValType, NULL, &Zero) != ERROR_MORE_DATA &&
+        if (FileName && FileHandle != INVALID_HANDLE_VALUE && Key != INVALID_HANDLE_VALUE && Key &&
+            RegQueryValueExW(Key, L"NetCfgInstanceId", NULL, &ValType, NULL, &Zero) != ERROR_MORE_DATA &&
             CM_Get_DevNode_Status(&Status, &Number, DevInfoData->DevInst, 0) == CR_SUCCESS &&
             !(Status & DN_HAS_PROBLEM) && !Number)
         {
@@ -46,8 +52,10 @@ WaitForInterfaceWin7(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData, _
             break;
         }
     }
-    if (Key != INVALID_HANDLE_VALUE)
+    if (Key != INVALID_HANDLE_VALUE && Key)
         RegCloseKey(Key);
+    if (FileHandle != INVALID_HANDLE_VALUE)
+        CloseHandle(FileHandle);
     Free(FileName);
     return Ret;
 }
