@@ -45,7 +45,7 @@ typedef struct _WIREGUARD_ADAPTER *WIREGUARD_ADAPTER_HANDLE;
  *                      characters.
  *
  * @param TunelType     Name of the adapter tunnel type. Zero-terminated string of up to MAX_ADAPTER_NAME-1
- * characters.
+ *                      characters.
  *
  * @param RequestedGUID The GUID of the created network adapter, which then influences NLA generation deterministically.
  *                      If it is set to NULL, the GUID is chosen by the system at random, and hence a new NLA entry is

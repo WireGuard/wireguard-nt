@@ -70,27 +70,18 @@ SnapshotConfigurationAndState(
         0);
 
     DWORD LastError = ERROR_SUCCESS;
-    DWORD RequiredBytes;
-    if (SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, NULL, 0, &RequiredBytes) ||
-        (LastError = GetLastError()) != ERROR_INSUFFICIENT_BUFFER)
-    {
-        LOG_ERROR(LastError, L"Failed to query adapter \"%s\" instance ID size", Name);
-        return FALSE;
-    }
-    LastError = ERROR_SUCCESS;
-    LPWSTR InstanceId = ZallocArray(RequiredBytes, sizeof(*InstanceId));
-    if (!InstanceId)
-        return FALSE;
+    WCHAR InstanceId[MAX_INSTANCE_ID];
+    DWORD RequiredBytes = _countof(InstanceId);
     if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, RequiredBytes, &RequiredBytes))
     {
         LastError = LOG_LAST_ERROR(L"Failed to get adapter \"%s\" instance ID", Name);
-        goto cleanupInstanceId;
+        goto cleanup;
     }
     HANDLE NdisHandle = OpenDeviceObject(InstanceId);
     if (NdisHandle == INVALID_HANDLE_VALUE)
     {
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get adapter \"%s\" object", Name);
-        goto cleanupInstanceId;
+        goto cleanup;
     }
     WG_IOCTL_ADAPTER_STATE Op = WG_IOCTL_ADAPTER_STATE_QUERY;
     if (!DeviceIoControl(
@@ -120,8 +111,7 @@ SnapshotConfigurationAndState(
     }
 cleanupHandle:
     CloseHandle(NdisHandle);
-cleanupInstanceId:
-    Free(InstanceId);
+cleanup:
     return RET_ERROR(TRUE, LastError);
 }
 
@@ -147,27 +137,18 @@ RestoreConfigurationAndState(
         0);
 
     DWORD LastError = ERROR_SUCCESS;
-    DWORD RequiredBytes;
-    if (SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, NULL, 0, &RequiredBytes) ||
-        (LastError = GetLastError()) != ERROR_INSUFFICIENT_BUFFER)
-    {
-        LOG_ERROR(LastError, L"Failed to query adapter \"%s\" instance ID size", Name);
-        return FALSE;
-    }
-    LastError = ERROR_SUCCESS;
-    LPWSTR InstanceId = ZallocArray(RequiredBytes, sizeof(*InstanceId));
-    if (!InstanceId)
-        return FALSE;
+    WCHAR InstanceId[MAX_INSTANCE_ID];
+    DWORD RequiredBytes = _countof(InstanceId);
     if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, RequiredBytes, &RequiredBytes))
     {
         LastError = LOG_LAST_ERROR(L"Failed to get adapter \"%s\" instance ID", Name);
-        goto cleanupInstanceId;
+        goto cleanup;
     }
     HANDLE NdisHandle = OpenDeviceObject(InstanceId);
     if (NdisHandle == INVALID_HANDLE_VALUE)
     {
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to get adapter \"%s\" object", Name);
-        goto cleanupInstanceId;
+        goto cleanup;
     }
     if (!DeviceIoControl(NdisHandle, WG_IOCTL_SET, NULL, 0, Configuration, ConfigurationBytes, &RequiredBytes, NULL))
     {
@@ -181,8 +162,7 @@ RestoreConfigurationAndState(
     }
 cleanupHandle:
     CloseHandle(NdisHandle);
-cleanupInstanceId:
-    Free(InstanceId);
+cleanup:
     return RET_ERROR(TRUE, LastError);
 }
 
