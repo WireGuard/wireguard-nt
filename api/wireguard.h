@@ -44,7 +44,7 @@ typedef struct _WIREGUARD_ADAPTER *WIREGUARD_ADAPTER_HANDLE;
  * @param Name          The requested name of the adapter. Zero-terminated string of up to MAX_ADAPTER_NAME-1
  *                      characters.
  *
- * @param TunelType     Name of the adapter tunnel type. Zero-terminated string of up to MAX_ADAPTER_NAME-1
+ * @param TunnelType    Name of the adapter tunnel type. Zero-terminated string of up to MAX_ADAPTER_NAME-1
  *                      characters.
  *
  * @param RequestedGUID The GUID of the created network adapter, which then influences NLA generation deterministically.
@@ -156,7 +156,7 @@ typedef enum
 } WIREGUARD_ADAPTER_LOG_STATE;
 
 /**
- * Sets whether and how the adapter logs to the logger previously set up with WireGuardSetLoggerFunc.
+ * Sets whether and how the adapter logs to the logger previously set up with WireGuardSetLogger.
  *
  * @param Adapter       Adapter handle obtained with WireGuardCreateAdapter or WireGuardOpenAdapter
  *
