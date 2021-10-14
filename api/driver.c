@@ -70,7 +70,7 @@ SnapshotConfigurationAndState(
         0);
 
     DWORD LastError = ERROR_SUCCESS;
-    WCHAR InstanceId[MAX_INSTANCE_ID];
+    WCHAR InstanceId[MAX_DEVICE_ID_LEN];
     DWORD RequiredBytes = _countof(InstanceId);
     if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, RequiredBytes, &RequiredBytes))
     {
@@ -137,7 +137,7 @@ RestoreConfigurationAndState(
         0);
 
     DWORD LastError = ERROR_SUCCESS;
-    WCHAR InstanceId[MAX_INSTANCE_ID];
+    WCHAR InstanceId[MAX_DEVICE_ID_LEN];
     DWORD RequiredBytes = _countof(InstanceId);
     if (!SetupDiGetDeviceInstanceIdW(DevInfo, DevInfoData, InstanceId, RequiredBytes, &RequiredBytes))
     {
