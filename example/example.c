@@ -37,18 +37,11 @@ InitializeWireGuardNT(void)
         LoadLibraryExW(L"wireguard.dll", NULL, LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!WireGuardDll)
         return NULL;
-#define X(Name, Type) ((Name = (Type *)GetProcAddress(WireGuardDll, #Name)) == NULL)
-    if (X(WireGuardCreateAdapter, WIREGUARD_CREATE_ADAPTER_FUNC) ||
-        X(WireGuardOpenAdapter, WIREGUARD_OPEN_ADAPTER_FUNC) ||
-        X(WireGuardCloseAdapter, WIREGUARD_CLOSE_ADAPTER_FUNC) ||
-        X(WireGuardGetAdapterLUID, WIREGUARD_GET_ADAPTER_LUID_FUNC) ||
-        X(WireGuardGetRunningDriverVersion, WIREGUARD_GET_RUNNING_DRIVER_VERSION_FUNC) ||
-        X(WireGuardDeleteDriver, WIREGUARD_DELETE_DRIVER_FUNC) || X(WireGuardSetLogger, WIREGUARD_SET_LOGGER_FUNC) ||
-        X(WireGuardSetAdapterLogging, WIREGUARD_SET_ADAPTER_LOGGING_FUNC) ||
-        X(WireGuardGetAdapterState, WIREGUARD_GET_ADAPTER_STATE_FUNC) ||
-        X(WireGuardSetAdapterState, WIREGUARD_SET_ADAPTER_STATE_FUNC) ||
-        X(WireGuardGetConfiguration, WIREGUARD_GET_CONFIGURATION_FUNC) ||
-        X(WireGuardSetConfiguration, WIREGUARD_SET_CONFIGURATION_FUNC))
+#define X(Name) ((*(FARPROC *)&Name = GetProcAddress(WireGuardDll, #Name)) == NULL)
+    if (X(WireGuardCreateAdapter) || X(WireGuardOpenAdapter) || X(WireGuardCloseAdapter) ||
+        X(WireGuardGetAdapterLUID) || X(WireGuardGetRunningDriverVersion) || X(WireGuardDeleteDriver) ||
+        X(WireGuardSetLogger) || X(WireGuardSetAdapterLogging) || X(WireGuardGetAdapterState) ||
+        X(WireGuardSetAdapterState) || X(WireGuardGetConfiguration) || X(WireGuardSetConfiguration))
 #undef X
     {
         DWORD LastError = GetLastError();
