@@ -286,7 +286,7 @@ SetPeer(_Inout_ WG_DEVICE *Wg, _Inout_ CONST volatile WG_IOCTL_PEER **UnsafeIoct
     if (!Peer)
     {
         /* Peer doesn't exist yet. Add a new one. */
-        if (IoctlPeer.Flags & (WG_IOCTL_PEER_REMOVE | WG_IOCTL_PEER_UPDATE))
+        if (IoctlPeer.Flags & (WG_IOCTL_PEER_REMOVE | WG_IOCTL_PEER_UPDATE_ONLY))
             goto cleanupStack;
 
         /* The peer is new, so there aren't allowed IPs to remove. */

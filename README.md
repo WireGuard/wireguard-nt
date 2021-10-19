@@ -287,7 +287,7 @@ These values may be or'd together.
 |`WIREGUARD_PEER_HAS_ENDPOINT`|The Endpoint field is set.|
 |`WIREGUARD_PEER_REPLACE_ALLOWED_IPS`|Remove all allowed IPs before adding new ones (unused on get).|
 |`WIREGUARD_PEER_REMOVE`|Remove specified peer (unused on get).|
-|`WIREGUARD_PEER_UPDATE`|Do not add a new peer (unused on get).|
+|`WIREGUARD_PEER_UPDATE_ONLY`|Do not add a new peer (unused on get).|
 
 ### Function: `WireGuardSetConfiguration` - sets configuration of adapter.
 

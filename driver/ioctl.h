@@ -42,7 +42,7 @@ typedef enum
     WG_IOCTL_PEER_HAS_PROTOCOL_VERSION = 1 << 4,
     WG_IOCTL_PEER_REPLACE_ALLOWED_IPS = 1 << 5,
     WG_IOCTL_PEER_REMOVE = 1 << 6,
-    WG_IOCTL_PEER_UPDATE = 1 << 7
+    WG_IOCTL_PEER_UPDATE_ONLY = 1 << 7
 } WG_IOCTL_PEER_FLAG;
 
 typedef __declspec(align(8)) struct _WG_IOCTL_PEER

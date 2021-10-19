@@ -229,7 +229,7 @@ typedef enum
     WIREGUARD_PEER_HAS_ENDPOINT = 1 << 3,             /**< The Endpoint field is set */
     WIREGUARD_PEER_REPLACE_ALLOWED_IPS = 1 << 5,      /**< Remove all allowed IPs before adding new ones */
     WIREGUARD_PEER_REMOVE = 1 << 6,                   /**< Remove specified peer */
-    WIREGUARD_PEER_UPDATE = 1 << 7                    /**< Do not add a new peer */
+    WIREGUARD_PEER_UPDATE_ONLY = 1 << 7               /**< Do not add a new peer */
 } WIREGUARD_PEER_FLAG;
 
 typedef struct _WIREGUARD_PEER WIREGUARD_PEER;
