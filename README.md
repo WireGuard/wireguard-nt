@@ -1,7 +1,7 @@
 # [WireGuard](https://www.wireguard.com/) for the NT Kernel
 ### High performance in-kernel WireGuard implementation for Windows
 
-WireGuardNT is an implementation of WireGuard, for the NT Kernel as used in Windows 7, 8, 8.1, 10, and 11, supporting AMD64, x86, ARM64, and ARM processors.
+WireGuardNT is an implementation of WireGuard, for the NT Kernel as used in Windows 7, 8, 8.1, 10, and 11, supporting AMD64, x86, and ARM64 processors.
 
 #### Not the droids you're looking for
 

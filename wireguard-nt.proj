@@ -15,8 +15,8 @@
   <Import Project="wireguard-nt.props" />
   <Import Project="wireguard-nt.props.user" Condition="exists('wireguard-nt.props.user')" />
 
-  <Target Name="Driver" DependsOnTargets="Driver-x86;Driver-amd64;Driver-arm;Driver-arm64" />
-  <Target Name="Dll"    DependsOnTargets="Dll-x86;Dll-amd64;Dll-arm;Dll-arm64" />
+  <Target Name="Driver" DependsOnTargets="Driver-x86;Driver-amd64;Driver-arm64" />
+  <Target Name="Dll"    DependsOnTargets="Dll-x86;Dll-amd64;Dll-arm64" />
   <Target Name="Clean">
     <RemoveDir Directories="$(Configuration)\amd64\" />
     <RemoveDir Directories="$(Configuration)\arm\" />
@@ -77,7 +77,6 @@
     <ZipFilesSrc Include="README.md"                            /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\README.md"               />
     <ZipFilesSrc Include="api\wireguard.h"                      /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\include\wireguard.h"     />
     <ZipFilesSrc Include="$(Configuration)\amd64\wireguard.dll" /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\bin\amd64\wireguard.dll" />
-    <ZipFilesSrc Include="$(Configuration)\arm\wireguard.dll"   /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\bin\arm\wireguard.dll"   />
     <ZipFilesSrc Include="$(Configuration)\arm64\wireguard.dll" /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\bin\arm64\wireguard.dll" />
     <ZipFilesSrc Include="$(Configuration)\x86\wireguard.dll"   /><ZipFilesDst Include="$(ZipIntDir)wireguard-nt\bin\x86\wireguard.dll"   />
   </ItemGroup>
