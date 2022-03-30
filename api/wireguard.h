@@ -231,6 +231,7 @@ typedef enum
     WIREGUARD_PEER_REMOVE = 1 << 6,                   /**< Remove specified peer */
     WIREGUARD_PEER_UPDATE_ONLY = 1 << 7               /**< Do not add a new peer */
 } WIREGUARD_PEER_FLAG;
+DEFINE_ENUM_FLAG_OPERATORS(WIREGUARD_PEER_FLAG)
 
 typedef struct _WIREGUARD_PEER WIREGUARD_PEER;
 struct ALIGNED(8) _WIREGUARD_PEER
@@ -254,6 +255,7 @@ typedef enum
     WIREGUARD_INTERFACE_HAS_LISTEN_PORT = (1 << 2), /**< The ListenPort field is set */
     WIREGUARD_INTERFACE_REPLACE_PEERS = (1 << 3)    /**< Remove all peers before adding new ones */
 } WIREGUARD_INTERFACE_FLAG;
+DEFINE_ENUM_FLAG_OPERATORS(WIREGUARD_INTERFACE_FLAG)
 
 typedef struct _WIREGUARD_INTERFACE WIREGUARD_INTERFACE;
 struct ALIGNED(8) _WIREGUARD_INTERFACE
