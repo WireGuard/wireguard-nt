@@ -8,7 +8,7 @@
 #include "peer.h"
 #include "logging.h"
 
-#define STACK_ENTRIES 128
+#define STACK_ENTRIES 129
 
 static LOOKASIDE_ALIGN LOOKASIDE_LIST_EX NodeCache;
 

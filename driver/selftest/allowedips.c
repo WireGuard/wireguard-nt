@@ -101,6 +101,7 @@ AllowedIpsSelftest(VOID)
     EX_PUSH_LOCK Mutex;
     SIZE_T i = 0, Count = 0;
     UINT64_BE Part;
+    __declspec(align(8)) UINT8 Ip[16];
 
     MuInitializePushLock(&Mutex);
     MuAcquirePushLockExclusive(&Mutex);
@@ -190,19 +191,21 @@ AllowedIpsSelftest(VOID)
     AllowedIpsRemoveByPeer(&t, A, &Mutex);
     TestNegative(4, A, 192, 168, 0, 1);
 
-    /* These will hit the NT_ASSERT(len < 128) in free_node if something
-     * goes wrong.
+    /* These will hit the NT_ASSERT(len < STACK_ENTRIES) in RootFreeRcu if
+     * something goes wrong.
      */
-    for (i = 0; i < 128; ++i)
+    for (i = 0; i < 64; ++i)
     {
-        IN6_ADDR Ip;
-
-        Part = CpuToBe64(~(1LLU << (i % 64)));
-        RtlFillMemory(&Ip, 16, 0xff);
-        RtlCopyMemory((UINT8 *)&Ip + (SIZE_T)(i < 64) * 8, &Part, 8);
-        AllowedIpsInsertV6(&t, &Ip, 128, A, &Mutex);
+        Part = CpuToBe64(~0LLU << i);
+        RtlFillMemory(Ip, 8, 0xff);
+        RtlCopyMemory(Ip + 8, &Part, 8);
+        AllowedIpsInsertV6(&t, (IN6_ADDR *)Ip, 128, A, &Mutex);
+        RtlCopyMemory(Ip, &Part, 8);
+        RtlFillMemory(Ip + 8, 8, 0);
+        AllowedIpsInsertV6(&t, (IN6_ADDR *)Ip, 128, A, &Mutex);
     }
-
+    RtlFillMemory(Ip, 16, 0);
+    AllowedIpsInsertV6(&t, (IN6_ADDR *)Ip, 128, A, &Mutex);
     AllowedIpsFree(&t, &Mutex);
 
     AllowedIpsInit(&t);
@@ -214,7 +217,6 @@ AllowedIpsSelftest(VOID)
     LIST_FOR_EACH_ENTRY (IterNode, &A->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
     {
         UINT8 Cidr;
-        __declspec(align(8)) UINT8 Ip[16];
         ADDRESS_FAMILY Family = AllowedIpsReadNode(IterNode, Ip, &Cidr);
 
         ++Count;
