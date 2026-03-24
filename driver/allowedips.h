@@ -34,7 +34,6 @@ typedef __declspec(align(4)) struct _ALLOWEDIPS_TABLE
 {
     ALLOWEDIPS_NODE __rcu *Root4;
     ALLOWEDIPS_NODE __rcu *Root6;
-    UINT64 Seq;
 } ALLOWEDIPS_TABLE;
 
 VOID

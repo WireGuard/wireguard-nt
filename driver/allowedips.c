@@ -362,7 +362,6 @@ VOID
 AllowedIpsInit(ALLOWEDIPS_TABLE *Table)
 {
     Table->Root4 = Table->Root6 = NULL;
-    Table->Seq = 1;
 }
 
 _Use_decl_annotations_
@@ -372,7 +371,6 @@ AllowedIpsFree(ALLOWEDIPS_TABLE *Table, EX_PUSH_LOCK *Lock)
     ALLOWEDIPS_NODE *Old4 = RcuDereferenceProtected(ALLOWEDIPS_NODE, Table->Root4, Lock);
     ALLOWEDIPS_NODE *Old6 = RcuDereferenceProtected(ALLOWEDIPS_NODE, Table->Root6, Lock);
 
-    ++Table->Seq;
     RcuInitPointer(Table->Root4, NULL);
     RcuInitPointer(Table->Root6, NULL);
     if (Old4)
@@ -394,7 +392,6 @@ AllowedIpsInsertV4(ALLOWEDIPS_TABLE *Table, CONST IN_ADDR *Ip, UINT8 Cidr, WG_PE
     /* Aligned so it can be passed to FindLastSet */
     __declspec(align(4)) UINT8 Key[4];
 
-    ++Table->Seq;
     SwapEndian(Key, (CONST UINT8 *)Ip, 32);
     return Add(&Table->Root4, 32, Key, Cidr, Peer, Lock);
 }
@@ -406,7 +403,6 @@ AllowedIpsInsertV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_P
     /* Aligned so it can be passed to FindLastSet64 */
     __declspec(align(8)) UINT8 Key[16];
 
-    ++Table->Seq;
     SwapEndian(Key, (CONST UINT8 *)Ip, 128);
     return Add(&Table->Root6, 128, Key, Cidr, Peer, Lock);
 }
@@ -418,7 +414,6 @@ AllowedIpsRemoveV4(ALLOWEDIPS_TABLE *Table, CONST IN_ADDR *Ip, UINT8 Cidr, WG_PE
     /* Aligned so it can be passed to FindLastSet */
     __declspec(align(4)) UINT8 Key[4];
 
-    ++Table->Seq;
     SwapEndian(Key, (CONST UINT8 *)Ip, 32);
     return Remove(&Table->Root4, 32, Key, Cidr, Peer, Lock);
 }
@@ -430,7 +425,6 @@ AllowedIpsRemoveV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_P
     /* Aligned so it can be passed to FindLastSet64 */
     __declspec(align(8)) UINT8 Key[16];
 
-    ++Table->Seq;
     SwapEndian(Key, (CONST UINT8 *)Ip, 128);
     return Remove(&Table->Root6, 128, Key, Cidr, Peer, Lock);
 }
@@ -443,7 +437,6 @@ AllowedIpsRemoveByPeer(ALLOWEDIPS_TABLE *Table, WG_PEER *Peer, EX_PUSH_LOCK *Loc
 
     if (IsListEmpty(&Peer->AllowedIpsList))
         return;
-    ++Table->Seq;
     LIST_FOR_EACH_ENTRY_SAFE (Node, Tmp, &Peer->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
         RemoveNode(Node, Lock);
 }
