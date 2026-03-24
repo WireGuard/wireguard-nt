@@ -373,7 +373,6 @@ static VOID
 HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
 {
     WG_DEVICE *Wg = (WG_DEVICE *)MiniportAdapterContext;
-    IoctlHalt(Wg);
     MuAcquirePushLockExclusive(&DeviceListLock);
     RemoveEntryList(&Wg->DeviceList);
     MuReleasePushLockExclusive(&DeviceListLock);
@@ -552,7 +551,6 @@ InitializeEx(
     Wg->InterfaceIndex = MiniportInitParameters->IfIndex;
     Wg->InterfaceLuid = MiniportInitParameters->NetLuid;
     LogRingInit(&Wg->Log);
-    KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
 
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
     ExRundownCompleted(&Wg->ItemsInFlight); /* Wait until Restart is called to mark this active. */

@@ -676,13 +676,6 @@ ndisDispatch:
     return NdisDispatchPnp(DeviceObject, Irp);
 }
 
-_Use_decl_annotations_
-VOID
-IoctlHalt(WG_DEVICE *Wg)
-{
-    KeSetEvent(&Wg->DeviceRemoved, IO_NETWORK_INCREMENT, FALSE);
-}
-
 #ifdef ALLOC_PRAGMA
 #    pragma alloc_text(INIT, IoctlDriverEntry)
 #endif
