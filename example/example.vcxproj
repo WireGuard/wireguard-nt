@@ -26,6 +26,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>bcrypt.lib;crypt32.lib;iphlpapi.lib;kernel32.lib;ntdll.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <MinimumRequiredVersion>$(SUBSYSTEM_NATVER)</MinimumRequiredVersion>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

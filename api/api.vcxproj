@@ -39,6 +39,7 @@
       <AdditionalDependencies>Cfgmgr32.lib;Iphlpapi.lib;onecore.lib;$(IntDir)nci.lib;ntdll.lib;Setupapi.lib;shlwapi.lib;swdevice.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
       <SubSystem>Windows</SubSystem>
+      <MinimumRequiredVersion>$(SUBSYSTEM_NATVER)</MinimumRequiredVersion>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
