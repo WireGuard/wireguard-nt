@@ -180,7 +180,3 @@ cleanup:
 
     WriteFormatted(STD_OUTPUT_HANDLE, L"%1!X!", LastError);
 }
-
-#if NTDDI_VERSION == NTDDI_WIN7
-#include "host_win7.h"
-#endif

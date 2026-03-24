@@ -103,7 +103,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         }
     }
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -483,7 +483,7 @@ Set(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         return;
     }
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -554,7 +554,7 @@ AdapterState(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     WG_IOCTL_ADAPTER_STATE Op;
     RtlCopyMemory(&Op, Irp->AssociatedIrp.SystemBuffer, sizeof(Op));
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -593,7 +593,7 @@ ReadLogLine(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     if (!HasAccess(FILE_READ_DATA, Irp->RequestorMode, &Irp->IoStatus.Status))
         return;
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -646,7 +646,7 @@ _Use_decl_annotations_
 static NTSTATUS
 DispatchCreate(DEVICE_OBJECT *DeviceObject, IRP *Irp)
 {
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (Wg && ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -666,7 +666,7 @@ DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
     if (Stack->MinorFunction != IRP_MN_QUERY_REMOVE_DEVICE && Stack->MinorFunction != IRP_MN_SURPRISE_REMOVAL)
         goto ndisDispatch;
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
     if (!Wg)
         goto ndisDispatch;
     WriteBooleanNoFence(&Wg->IsDeviceRemoving, TRUE);
@@ -680,7 +680,6 @@ _Use_decl_annotations_
 VOID
 IoctlHalt(WG_DEVICE *Wg)
 {
-    WritePointerNoFence(&Wg->FunctionalDeviceObject->Reserved, NULL);
     KeSetEvent(&Wg->DeviceRemoved, IO_NETWORK_INCREMENT, FALSE);
 }
 

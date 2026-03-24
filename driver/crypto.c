@@ -62,15 +62,6 @@ static CONST CPUID_BIT_INFO CpuidBitInfo[] = {
 
 VOID CryptoDriverEntry(VOID)
 {
-    /* It's not like it's exactly hard or complicated to support Windows 7, 8, or 8.1 kernels here,
-     * but it also means more testing, and given how poorly suited those old network stacks are for
-     * high speed networking, it's simpler to just fall back to the slow implementations, and concern
-     * ourselves with Windows 10 (and later, given the recent bout of Start Menu meddling).
-     */
-    RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
-    if (!NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) || OsVersionInfo.dwMajorVersion < 10)
-        return;
-
     CPU_FEATURE DisabledCpuFeatures =
         ~(CPU_FEATURE_SSSE3 | CPU_FEATURE_AVX | CPU_FEATURE_AVX2 | CPU_FEATURE_AVX512F | CPU_FEATURE_AVX512VL |
           CPU_FEATURE_AVX512IFMA);

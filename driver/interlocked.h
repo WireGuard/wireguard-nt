@@ -134,11 +134,7 @@ _IRQL_requires_max_(APC_LEVEL)
 static inline VOID
 MuInitializePushLock(_Out_ PEX_PUSH_LOCK PushLock)
 {
-#ifdef EX_LEGACY_PUSH_LOCKS
-    FltInitializePushLock(PushLock);
-#else
     ExInitializePushLock(PushLock);
-#endif
 }
 
 _Acquires_lock_(_Global_critical_region_)
@@ -147,12 +143,8 @@ static inline VOID
 MuAcquirePushLockExclusive(_Inout_ _Requires_lock_not_held_(*_Curr_) _Acquires_exclusive_lock_(*_Curr_)
                                PEX_PUSH_LOCK PushLock)
 {
-#ifdef EX_LEGACY_PUSH_LOCKS
-    FltAcquirePushLockExclusive(PushLock);
-#else
     KeEnterCriticalRegion();
     ExAcquirePushLockExclusive(PushLock);
-#endif
 }
 
 _Acquires_lock_(_Global_critical_region_)
@@ -161,12 +153,8 @@ static inline VOID
 MuAcquirePushLockShared(_Inout_ _Requires_lock_not_held_(*_Curr_) _Acquires_shared_lock_(*_Curr_)
                             PEX_PUSH_LOCK PushLock)
 {
-#ifdef EX_LEGACY_PUSH_LOCKS
-    FltAcquirePushLockShared(PushLock);
-#else
     KeEnterCriticalRegion();
     ExAcquirePushLockShared(PushLock);
-#endif
 }
 
 _Releases_lock_(_Global_critical_region_)
@@ -175,12 +163,8 @@ static inline VOID
 MuReleasePushLockExclusive(_Inout_ _Requires_exclusive_lock_held_(*_Curr_) _Releases_exclusive_lock_(*_Curr_)
                                PEX_PUSH_LOCK PushLock)
 {
-#ifdef EX_LEGACY_PUSH_LOCKS
-    FltReleasePushLock(PushLock);
-#else
     ExReleasePushLockExclusive(PushLock);
     KeLeaveCriticalRegion();
-#endif
 }
 
 _Releases_lock_(_Global_critical_region_)
@@ -190,10 +174,6 @@ MuReleasePushLockShared(_Inout_ _Requires_shared_lock_held_(*_Curr_) _Releases_s
                             PEX_PUSH_LOCK PushLock)
 {
     _Analysis_suppress_lock_checking_(PushLock);
-#ifdef EX_LEGACY_PUSH_LOCKS
-    FltReleasePushLock(PushLock);
-#else
     ExReleasePushLockShared(PushLock);
     KeLeaveCriticalRegion();
-#endif
 }

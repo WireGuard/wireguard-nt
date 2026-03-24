@@ -25,7 +25,6 @@
     <Link>
       <AdditionalDependencies>ndis.lib;netio.lib;ntstrsafe.lib;uuid.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalDependencies Condition="'$(SDVHacks)'!='true'">cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(TargetVersion)'=='Windows7' OR '$(TargetVersion)'=='Windows8'">fltmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">

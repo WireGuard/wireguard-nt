@@ -366,33 +366,4 @@ DisableInstanceViaRundll32(HDEVINFO DevInfo, SP_DEVINFO_DATA *DevInfoData)
 {
     return InvokeClassInstaller(L"disable", L"DisableInstance", DevInfo, DevInfoData);
 }
-
-_Use_decl_annotations_
-BOOL
-CreateInstanceWin7ViaRundll32(LPWSTR InstanceId)
-{
-    LOG(WIREGUARD_LOG_INFO, L"Spawning native process to create instance");
-
-    DWORD LastError;
-    WCHAR Response[MAX_DEVICE_ID_LEN + 1];
-    if (!ExecuteRunDll32(L"CreateInstanceWin7", L"", Response, _countof(Response)))
-    {
-        LastError = LOG_LAST_ERROR(L"Error executing worker process");
-        goto cleanup;
-    }
-    int Argc;
-    LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 2)
-    {
-        LastError = LOG_ERROR(ERROR_INVALID_PARAMETER, L"Incomplete response: %s", Response);
-        goto cleanupArgv;
-    }
-    LastError = wcstoul(Argv[0], NULL, 16);
-    if (LastError == ERROR_SUCCESS)
-        wcsncpy_s(InstanceId, MAX_DEVICE_ID_LEN, Argv[1], _TRUNCATE);
-cleanupArgv:
-    LocalFree(Argv);
-cleanup:
-    return RET_ERROR(TRUE, LastError);
-}
 #endif

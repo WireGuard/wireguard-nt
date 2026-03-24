@@ -49,7 +49,6 @@
     <None Include="nci.def" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="adapter_win7.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="adapter.h" />
     <ClInclude Include="driver.h" />

@@ -28,9 +28,6 @@
   <ItemGroup>
     <ClCompile Include="host.c" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="host_win7.h" />
-  </ItemGroup>
   <Import Project="..\wireguard-nt.props.user" Condition="exists('..\wireguard-nt.props.user')" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

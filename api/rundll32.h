@@ -20,7 +20,3 @@ EnableInstanceViaRundll32(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoDa
 _Return_type_success_(return != FALSE)
 BOOL
 DisableInstanceViaRundll32(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA *DevInfoData);
-
-_Return_type_success_(return != FALSE)
-BOOL
-CreateInstanceWin7ViaRundll32(_Out_writes_z_(MAX_DEVICE_ID_LEN) LPWSTR InstanceId);

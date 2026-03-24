@@ -554,19 +554,6 @@ InitializeEx(
     LogRingInit(&Wg->Log);
     KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
 
-    NdisMGetDeviceProperty(MiniportAdapterHandle, NULL, &Wg->FunctionalDeviceObject, NULL, NULL, NULL);
-    if (!Wg->FunctionalDeviceObject)
-    {
-        Status = STATUS_INVALID_PARAMETER;
-        goto cleanupWg;
-    }
-    NT_ASSERT(!Wg->FunctionalDeviceObject->Reserved);
-    /* Reverse engineering indicates that we'd be better off calling
-     * NdisWdfGetAdapterContextFromAdapterHandle(functional_device), which points to our WG_DEVICE object
-     * directly, but this isn't available before Windows 10, so for now we just stick it into this reserved field.
-     * Revisit this when we drop support for old Windows versions. */
-    Wg->FunctionalDeviceObject->Reserved = Wg;
-
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
     ExRundownCompleted(&Wg->ItemsInFlight); /* Wait until Restart is called to mark this active. */
 
