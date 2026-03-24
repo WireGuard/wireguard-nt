@@ -99,6 +99,6 @@ RounddownPowOfTwo(_In_ ULONG_PTR N)
     return N - (N >> 1);
 }
 
-#define DIV_ROUND_UP(N, D) (((N) + (D)-1) / (D))
-#define ALIGN_DOWN_BY_T(T, Length, Alignment) ((T)(Length) & ~((T)(Alignment)-1))
-#define ALIGN_UP_BY_T(T, Length, Alignment) (ALIGN_DOWN_BY_T(T, ((T)(Length) + (Alignment)-1), Alignment))
+#define DIV_ROUND_UP(N, D) (((N) + (D) - 1) / (D))
+#define ALIGN_DOWN_BY_T(T, Length, Alignment) ((T)(Length) & ~((T)(Alignment) - 1))
+#define ALIGN_UP_BY_T(T, Length, Alignment) (ALIGN_DOWN_BY_T(T, ((T)(Length) + (Alignment) - 1), Alignment))
