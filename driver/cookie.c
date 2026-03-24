@@ -38,7 +38,7 @@ PrecomputeKey(
     _In_reads_bytes_(NOISE_PUBLIC_KEY_LEN) CONST UINT8 Pubkey[NOISE_PUBLIC_KEY_LEN],
     _In_reads_bytes_(COOKIE_KEY_LABEL_LEN) CONST UINT8 Label[COOKIE_KEY_LABEL_LEN])
 {
-    BLAKE2S_STATE Blake;
+    BLAKE2S_CTX Blake;
 
     Blake2sInit(&Blake, NOISE_SYMMETRIC_KEY_LEN);
     Blake2sUpdate(&Blake, Label, COOKIE_KEY_LABEL_LEN);
@@ -108,7 +108,7 @@ MakeCookie(
     _In_ CONST SOCKADDR *Src,
     _Inout_ COOKIE_CHECKER *Checker)
 {
-    BLAKE2S_STATE State;
+    BLAKE2S_CTX Blake;
 
     if (BirthdateHasExpired(Checker->SecretBirthdate, COOKIE_SECRET_MAX_AGE))
     {
@@ -120,20 +120,20 @@ MakeCookie(
 
     MuAcquirePushLockShared(&Checker->SecretLock);
 
-    Blake2sInitKey(&State, COOKIE_LEN, Checker->Secret, NOISE_HASH_LEN);
+    Blake2sInitKey(&Blake, COOKIE_LEN, Checker->Secret, NOISE_HASH_LEN);
     if (Src->sa_family == AF_INET)
     {
         CONST SOCKADDR_IN *Src4 = (CONST SOCKADDR_IN *)Src;
-        Blake2sUpdate(&State, (UINT8 *)&Src4->sin_addr, sizeof(Src4->sin_addr));
-        Blake2sUpdate(&State, (UINT8 *)&Src4->sin_port, sizeof(Src4->sin_port));
+        Blake2sUpdate(&Blake, (UINT8 *)&Src4->sin_addr, sizeof(Src4->sin_addr));
+        Blake2sUpdate(&Blake, (UINT8 *)&Src4->sin_port, sizeof(Src4->sin_port));
     }
     else if (Src->sa_family == AF_INET6)
     {
         CONST SOCKADDR_IN6 *Src6 = (CONST SOCKADDR_IN6 *)Src;
-        Blake2sUpdate(&State, (UINT8 *)&Src6->sin6_addr, sizeof(Src6->sin6_addr));
-        Blake2sUpdate(&State, (UINT8 *)&Src6->sin6_port, sizeof(Src6->sin6_port));
+        Blake2sUpdate(&Blake, (UINT8 *)&Src6->sin6_addr, sizeof(Src6->sin6_addr));
+        Blake2sUpdate(&Blake, (UINT8 *)&Src6->sin6_port, sizeof(Src6->sin6_port));
     }
-    Blake2sFinal(&State, Cookie);
+    Blake2sFinal(&Blake, Cookie);
 
     MuReleasePushLockShared(&Checker->SecretLock);
 }

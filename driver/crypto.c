@@ -870,33 +870,33 @@ ChaCha20Poly1305Encrypt(
     CONST UINT64 Nonce,
     CONST UINT8 Key[CHACHA20POLY1305_KEY_SIZE])
 {
-    POLY1305_CTX Poly1305State;
-    CHACHA20_CTX ChaCha20State;
+    POLY1305_CTX Poly1305Ctx;
+    CHACHA20_CTX ChaCha20Ctx;
     union
     {
         UINT8 Block0[POLY1305_KEY_SIZE];
         UINT64 Lens[2];
     } B = { { 0 } };
 
-    ChaCha20Init(&ChaCha20State, Key, Nonce);
-    ChaCha20(&ChaCha20State, B.Block0, B.Block0, sizeof(B.Block0), NULL);
-    Poly1305Init(&Poly1305State, B.Block0, NULL);
+    ChaCha20Init(&ChaCha20Ctx, Key, Nonce);
+    ChaCha20(&ChaCha20Ctx, B.Block0, B.Block0, sizeof(B.Block0), NULL);
+    Poly1305Init(&Poly1305Ctx, B.Block0, NULL);
 
-    Poly1305Update(&Poly1305State, Ad, AdLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - AdLen) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Ad, AdLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - AdLen) & 0xf);
 
-    ChaCha20(&ChaCha20State, Dst, Src, SrcLen, NULL);
+    ChaCha20(&ChaCha20Ctx, Dst, Src, SrcLen, NULL);
 
-    Poly1305Update(&Poly1305State, Dst, SrcLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - SrcLen) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Dst, SrcLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - SrcLen) & 0xf);
 
     B.Lens[0] = CpuToLe64(AdLen);
     B.Lens[1] = CpuToLe64(SrcLen);
-    Poly1305Update(&Poly1305State, (UINT8 *)B.Lens, sizeof(B.Lens));
+    Poly1305Update(&Poly1305Ctx, (UINT8 *)B.Lens, sizeof(B.Lens));
 
-    Poly1305Final(&Poly1305State, Dst + SrcLen);
+    Poly1305Final(&Poly1305Ctx, Dst + SrcLen);
 
-    RtlSecureZeroMemory(&ChaCha20State, sizeof(ChaCha20State));
+    RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&B, sizeof(B));
 }
 
@@ -911,8 +911,8 @@ ChaCha20Poly1305Decrypt(
     CONST UINT64 Nonce,
     CONST UINT8 Key[CHACHA20POLY1305_KEY_SIZE])
 {
-    POLY1305_CTX Poly1305State;
-    CHACHA20_CTX ChaCha20State;
+    POLY1305_CTX Poly1305Ctx;
+    CHACHA20_CTX ChaCha20Ctx;
     BOOLEAN Ret;
     SIZE_T DstLen;
     union
@@ -925,28 +925,28 @@ ChaCha20Poly1305Decrypt(
     if (SrcLen < POLY1305_MAC_SIZE)
         return FALSE;
 
-    ChaCha20Init(&ChaCha20State, Key, Nonce);
-    ChaCha20(&ChaCha20State, B.Block0, B.Block0, sizeof(B.Block0), NULL);
-    Poly1305Init(&Poly1305State, B.Block0, NULL);
+    ChaCha20Init(&ChaCha20Ctx, Key, Nonce);
+    ChaCha20(&ChaCha20Ctx, B.Block0, B.Block0, sizeof(B.Block0), NULL);
+    Poly1305Init(&Poly1305Ctx, B.Block0, NULL);
 
-    Poly1305Update(&Poly1305State, Ad, AdLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - AdLen) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Ad, AdLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - AdLen) & 0xf);
 
     DstLen = SrcLen - POLY1305_MAC_SIZE;
-    Poly1305Update(&Poly1305State, Src, DstLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - DstLen) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Src, DstLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - DstLen) & 0xf);
 
     B.Lens[0] = CpuToLe64(AdLen);
     B.Lens[1] = CpuToLe64(DstLen);
-    Poly1305Update(&Poly1305State, (UINT8 *)B.Lens, sizeof(B.Lens));
+    Poly1305Update(&Poly1305Ctx, (UINT8 *)B.Lens, sizeof(B.Lens));
 
-    Poly1305Final(&Poly1305State, B.Mac);
+    Poly1305Final(&Poly1305Ctx, B.Mac);
 
     Ret = CryptoEqualMemory16(B.Mac, Src + DstLen);
     if (Ret)
-        ChaCha20(&ChaCha20State, Dst, Src, DstLen, NULL);
+        ChaCha20(&ChaCha20Ctx, Dst, Src, DstLen, NULL);
 
-    RtlSecureZeroMemory(&ChaCha20State, sizeof(ChaCha20State));
+    RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&B, sizeof(B));
 
     return Ret;
@@ -965,8 +965,8 @@ ChaCha20Poly1305DecryptMdl(
     CONST UINT8 Key[CHACHA20POLY1305_KEY_SIZE],
     CONST SIMD_STATE *Simd)
 {
-    POLY1305_CTX Poly1305State;
-    CHACHA20_CTX ChaCha20State;
+    POLY1305_CTX Poly1305Ctx;
+    CHACHA20_CTX ChaCha20Ctx;
     UINT8 *SrcBuf;
     ULONG Len, LenMdl, OffsetMdl = SrcOffset, Leftover = 0, Total = SrcLen - POLY1305_MAC_SIZE, Remaining = Total;
     MDL *Mdl = Src;
@@ -982,15 +982,15 @@ ChaCha20Poly1305DecryptMdl(
     if (SrcLen < POLY1305_MAC_SIZE)
         return FALSE;
 
-    ChaCha20Init(&ChaCha20State, Key, Nonce);
-    ChaCha20(&ChaCha20State, B.Block0, B.Block0, sizeof(B.Block0), Simd);
-    Poly1305Init(&Poly1305State, B.Block0, Simd);
+    ChaCha20Init(&ChaCha20Ctx, Key, Nonce);
+    ChaCha20(&ChaCha20Ctx, B.Block0, B.Block0, sizeof(B.Block0), Simd);
+    Poly1305Init(&Poly1305Ctx, B.Block0, Simd);
 
     if (AdLen)
     {
-        Poly1305Update(&Poly1305State, Ad, AdLen);
+        Poly1305Update(&Poly1305Ctx, Ad, AdLen);
         if (AdLen & 0xf)
-            Poly1305Update(&Poly1305State, Pad0, 0x10 - (AdLen & 0xf));
+            Poly1305Update(&Poly1305Ctx, Pad0, 0x10 - (AdLen & 0xf));
     }
 
     while (OffsetMdl >= MmGetMdlByteCount(Mdl))
@@ -1013,7 +1013,7 @@ ChaCha20Poly1305DecryptMdl(
          * access these pages, I fear it might be possible sneak in a buffer that isn't
          * actually authenticated.
          */
-        Poly1305Update(&Poly1305State, SrcBuf, LenMdl);
+        Poly1305Update(&Poly1305Ctx, SrcBuf, LenMdl);
 
         if (Leftover != 0)
         {
@@ -1028,7 +1028,7 @@ ChaCha20Poly1305DecryptMdl(
         if (Len >= CHACHA20_BLOCK_SIZE)
         {
             ULONG l = ALIGN_DOWN_BY_T(ULONG, Len, CHACHA20_BLOCK_SIZE);
-            ChaCha20(&ChaCha20State, Dst, SrcBuf, l, Simd);
+            ChaCha20(&ChaCha20Ctx, Dst, SrcBuf, l, Simd);
             SrcBuf += l;
             Dst += l;
             Len -= l;
@@ -1036,7 +1036,7 @@ ChaCha20Poly1305DecryptMdl(
 
         if (Len)
         {
-            ChaCha20Block(&ChaCha20State, B.Stream, Simd);
+            ChaCha20Block(&ChaCha20Ctx, B.Stream, Simd);
             XorCpy(Dst, SrcBuf, (UINT8 *)B.Stream, Len);
             Leftover = CHACHA20_BLOCK_SIZE - Len;
             Dst += Len;
@@ -1051,16 +1051,16 @@ ChaCha20Poly1305DecryptMdl(
         Mdl = Mdl->Next;
         OffsetMdl = 0;
     }
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - Total) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - Total) & 0xf);
     B.Lens[0] = CpuToLe64(AdLen);
     B.Lens[1] = CpuToLe64(Total);
-    Poly1305Update(&Poly1305State, (UINT8 *)B.Lens, sizeof(B.Lens));
-    Poly1305Final(&Poly1305State, B.Mac);
+    Poly1305Update(&Poly1305Ctx, (UINT8 *)B.Lens, sizeof(B.Lens));
+    Poly1305Final(&Poly1305Ctx, B.Mac);
     if (!NT_SUCCESS(MemCopyFromMdl(B.Mac + POLY1305_MAC_SIZE, Mdl, OffsetMdl, POLY1305_MAC_SIZE)))
         goto out;
     Ret = CryptoEqualMemory16(B.Mac, B.Mac + POLY1305_MAC_SIZE);
 out:
-    RtlSecureZeroMemory(&ChaCha20State, sizeof(ChaCha20State));
+    RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&B, sizeof(B));
     return Ret;
 }
@@ -1078,8 +1078,8 @@ ChaCha20Poly1305EncryptMdl(
     CONST UINT8 Key[CHACHA20POLY1305_KEY_SIZE],
     CONST SIMD_STATE *Simd)
 {
-    POLY1305_CTX Poly1305State;
-    CHACHA20_CTX ChaCha20State;
+    POLY1305_CTX Poly1305Ctx;
+    CHACHA20_CTX ChaCha20Ctx;
     UINT8 *SrcBuf;
     MDL *Mdl = Src;
     ULONG Len, LenMdl, OffsetMdl = SrcOffset, Leftover = 0;
@@ -1090,15 +1090,15 @@ ChaCha20Poly1305EncryptMdl(
         UINT64 Lens[2];
     } B = { { 0 } };
 
-    ChaCha20Init(&ChaCha20State, Key, Nonce);
-    ChaCha20(&ChaCha20State, B.Block0, B.Block0, sizeof(B.Block0), Simd);
-    Poly1305Init(&Poly1305State, B.Block0, Simd);
+    ChaCha20Init(&ChaCha20Ctx, Key, Nonce);
+    ChaCha20(&ChaCha20Ctx, B.Block0, B.Block0, sizeof(B.Block0), Simd);
+    Poly1305Init(&Poly1305Ctx, B.Block0, Simd);
 
     if (AdLen)
     {
-        Poly1305Update(&Poly1305State, Ad, AdLen);
+        Poly1305Update(&Poly1305Ctx, Ad, AdLen);
         if (AdLen & 0xf)
-            Poly1305Update(&Poly1305State, Pad0, 0x10 - (AdLen & 0xf));
+            Poly1305Update(&Poly1305Ctx, Pad0, 0x10 - (AdLen & 0xf));
     }
 
     while (OffsetMdl >= MmGetMdlByteCount(Mdl))
@@ -1129,7 +1129,7 @@ ChaCha20Poly1305EncryptMdl(
         if (Len >= CHACHA20_BLOCK_SIZE)
         {
             ULONG l = ALIGN_DOWN_BY_T(ULONG, Len, CHACHA20_BLOCK_SIZE);
-            ChaCha20(&ChaCha20State, Dst, SrcBuf, l, Simd);
+            ChaCha20(&ChaCha20Ctx, Dst, SrcBuf, l, Simd);
             SrcBuf += l;
             Dst += l;
             Len -= l;
@@ -1137,25 +1137,25 @@ ChaCha20Poly1305EncryptMdl(
 
         if (Len)
         {
-            ChaCha20Block(&ChaCha20State, B.Stream, Simd);
+            ChaCha20Block(&ChaCha20Ctx, B.Stream, Simd);
             XorCpy(Dst, SrcBuf, (UINT8 *)B.Stream, Len);
             Leftover = CHACHA20_BLOCK_SIZE - Len;
             Dst += Len;
         }
 
         _Analysis_assume_((RtlFillMemory(Dst - LenMdl, LenMdl, 'A'), TRUE));
-        Poly1305Update(&Poly1305State, Dst - LenMdl, LenMdl);
+        Poly1305Update(&Poly1305Ctx, Dst - LenMdl, LenMdl);
 
         Mdl = Mdl->Next;
         OffsetMdl = 0;
     }
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - SrcLen) & 0xf);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - SrcLen) & 0xf);
     B.Lens[0] = CpuToLe64(AdLen);
     B.Lens[1] = CpuToLe64(SrcLen);
-    Poly1305Update(&Poly1305State, (UINT8 *)B.Lens, sizeof(B.Lens));
-    Poly1305Final(&Poly1305State, Dst);
+    Poly1305Update(&Poly1305Ctx, (UINT8 *)B.Lens, sizeof(B.Lens));
+    Poly1305Final(&Poly1305Ctx, Dst);
 
-    RtlSecureZeroMemory(&ChaCha20State, sizeof(ChaCha20State));
+    RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&B, sizeof(B));
 
     return TRUE;
@@ -1213,53 +1213,53 @@ static CONST UINT8 Blake2sSigma[10][16] = {
 };
 
 static inline VOID
-Blake2sSetLastblock(_Out_ BLAKE2S_STATE *State)
+Blake2sSetLastblock(_Out_ BLAKE2S_CTX *Ctx)
 {
-    State->F[0] = (UINT32)-1;
+    Ctx->F[0] = (UINT32)-1;
 }
 
 static inline VOID
-Blake2sIncrementCounter(_Inout_ BLAKE2S_STATE *State, _In_ CONST UINT32 Inc)
+Blake2sIncrementCounter(_Inout_ BLAKE2S_CTX *Ctx, _In_ CONST UINT32 Inc)
 {
-    State->T[0] += Inc;
-    State->T[1] += (State->T[0] < Inc);
+    Ctx->T[0] += Inc;
+    Ctx->T[1] += (Ctx->T[0] < Inc);
 }
 
 static inline VOID
-Blake2sInitParam(_Out_ BLAKE2S_STATE *State, _In_ CONST UINT32 Param)
+Blake2sInitParam(_Out_ BLAKE2S_CTX *Ctx, _In_ CONST UINT32 Param)
 {
     LONG i;
 
-    RtlZeroMemory(State, sizeof(*State));
+    RtlZeroMemory(Ctx, sizeof(*Ctx));
     for (i = 0; i < 8; ++i)
-        State->H[i] = Blake2sIv[i];
-    State->H[0] ^= Param;
+        Ctx->H[i] = Blake2sIv[i];
+    Ctx->H[0] ^= Param;
 }
 
 _Use_decl_annotations_
 VOID
-Blake2sInit(BLAKE2S_STATE *State, CONST SIZE_T OutLen)
+Blake2sInit(BLAKE2S_CTX *Ctx, CONST SIZE_T OutLen)
 {
-    Blake2sInitParam(State, 0x01010000 | OutLen);
-    State->OutLen = OutLen;
+    Blake2sInitParam(Ctx, 0x01010000 | OutLen);
+    Ctx->OutLen = OutLen;
 }
 
 _Use_decl_annotations_
 VOID
-Blake2sInitKey(BLAKE2S_STATE *State, CONST SIZE_T OutLen, CONST UINT8 *Key, CONST SIZE_T KeyLen)
+Blake2sInitKey(BLAKE2S_CTX *Ctx, CONST SIZE_T OutLen, CONST UINT8 *Key, CONST SIZE_T KeyLen)
 {
     UINT8 Block[BLAKE2S_BLOCK_SIZE] = { 0 };
 
-    Blake2sInitParam(State, 0x01010000 | KeyLen << 8 | OutLen);
-    State->OutLen = OutLen;
+    Blake2sInitParam(Ctx, 0x01010000 | KeyLen << 8 | OutLen);
+    Ctx->OutLen = OutLen;
     RtlCopyMemory(Block, Key, KeyLen);
-    Blake2sUpdate(State, Block, BLAKE2S_BLOCK_SIZE);
+    Blake2sUpdate(Ctx, Block, BLAKE2S_BLOCK_SIZE);
     RtlSecureZeroMemory(Block, BLAKE2S_BLOCK_SIZE);
 }
 
 static inline VOID
 Blake2sCompress(
-    _Inout_ BLAKE2S_STATE *State,
+    _Inout_ BLAKE2S_CTX *Ctx,
     _In_reads_bytes_(BLAKE2S_BLOCK_SIZE *Nblocks) CONST UINT8 *Block,
     _In_ SIZE_T Nblocks,
     _In_ CONST UINT32 Inc)
@@ -1270,18 +1270,18 @@ Blake2sCompress(
 
     while (Nblocks > 0)
     {
-        Blake2sIncrementCounter(State, Inc);
+        Blake2sIncrementCounter(Ctx, Inc);
         RtlCopyMemory(M, Block, BLAKE2S_BLOCK_SIZE);
         Le32ToCpuArray(M, ARRAYSIZE(M));
-        RtlCopyMemory(V, State->H, 32);
+        RtlCopyMemory(V, Ctx->H, 32);
         V[8] = Blake2sIv[0];
         V[9] = Blake2sIv[1];
         V[10] = Blake2sIv[2];
         V[11] = Blake2sIv[3];
-        V[12] = Blake2sIv[4] ^ State->T[0];
-        V[13] = Blake2sIv[5] ^ State->T[1];
-        V[14] = Blake2sIv[6] ^ State->F[0];
-        V[15] = Blake2sIv[7] ^ State->F[1];
+        V[12] = Blake2sIv[4] ^ Ctx->T[0];
+        V[13] = Blake2sIv[5] ^ Ctx->T[1];
+        V[14] = Blake2sIv[6] ^ Ctx->F[0];
+        V[15] = Blake2sIv[7] ^ Ctx->F[1];
 
 #define G(R, i, A, B, C, D) \
     do \
@@ -1323,7 +1323,7 @@ Blake2sCompress(
 #undef ROUND
 
         for (i = 0; i < 8; ++i)
-            State->H[i] ^= V[i] ^ V[i + 8];
+            Ctx->H[i] ^= V[i] ^ V[i + 8];
 
         Block += BLAKE2S_BLOCK_SIZE;
         --Nblocks;
@@ -1332,17 +1332,17 @@ Blake2sCompress(
 
 _Use_decl_annotations_
 VOID
-Blake2sUpdate(BLAKE2S_STATE *State, CONST UINT8 *In, SIZE_T InLen)
+Blake2sUpdate(BLAKE2S_CTX *Ctx, CONST UINT8 *In, SIZE_T InLen)
 {
-    CONST SIZE_T Fill = BLAKE2S_BLOCK_SIZE - State->BufLen;
+    CONST SIZE_T Fill = BLAKE2S_BLOCK_SIZE - Ctx->BufLen;
 
     if (!InLen)
         return;
     if (InLen > Fill)
     {
-        RtlCopyMemory(State->Buf + State->BufLen, In, Fill);
-        Blake2sCompress(State, State->Buf, 1, BLAKE2S_BLOCK_SIZE);
-        State->BufLen = 0;
+        RtlCopyMemory(Ctx->Buf + Ctx->BufLen, In, Fill);
+        Blake2sCompress(Ctx, Ctx->Buf, 1, BLAKE2S_BLOCK_SIZE);
+        Ctx->BufLen = 0;
         In += Fill;
         InLen -= Fill;
     }
@@ -1350,55 +1350,55 @@ Blake2sUpdate(BLAKE2S_STATE *State, CONST UINT8 *In, SIZE_T InLen)
     {
         CONST SIZE_T Nblocks = DIV_ROUND_UP(InLen, BLAKE2S_BLOCK_SIZE);
         /* Hash one less (full) block than strictly possible */
-        Blake2sCompress(State, In, Nblocks - 1, BLAKE2S_BLOCK_SIZE);
+        Blake2sCompress(Ctx, In, Nblocks - 1, BLAKE2S_BLOCK_SIZE);
         In += BLAKE2S_BLOCK_SIZE * (Nblocks - 1);
         InLen -= BLAKE2S_BLOCK_SIZE * (Nblocks - 1);
     }
-    RtlCopyMemory(State->Buf + State->BufLen, In, InLen);
-    State->BufLen += InLen;
+    RtlCopyMemory(Ctx->Buf + Ctx->BufLen, In, InLen);
+    Ctx->BufLen += InLen;
 }
 
 _Use_decl_annotations_
 VOID
-Blake2sFinal(BLAKE2S_STATE *State, UINT8 *Out)
+Blake2sFinal(BLAKE2S_CTX *Ctx, UINT8 *Out)
 {
-    Blake2sSetLastblock(State);
-    RtlZeroMemory(State->Buf + State->BufLen, BLAKE2S_BLOCK_SIZE - State->BufLen); /* Padding */
-    Blake2sCompress(State, State->Buf, 1, State->BufLen);
-    CpuToLe32Array(State->H, ARRAYSIZE(State->H));
-    RtlCopyMemory(Out, State->H, State->OutLen);
-    RtlSecureZeroMemory(State, sizeof(*State));
+    Blake2sSetLastblock(Ctx);
+    RtlZeroMemory(Ctx->Buf + Ctx->BufLen, BLAKE2S_BLOCK_SIZE - Ctx->BufLen); /* Padding */
+    Blake2sCompress(Ctx, Ctx->Buf, 1, Ctx->BufLen);
+    CpuToLe32Array(Ctx->H, ARRAYSIZE(Ctx->H));
+    RtlCopyMemory(Out, Ctx->H, Ctx->OutLen);
+    RtlSecureZeroMemory(Ctx, sizeof(*Ctx));
 }
 
 _Use_decl_annotations_
 VOID
 Blake2s(CONST UINT8 *Key, CONST SIZE_T KeyLen, CONST UINT8 *In, CONST SIZE_T InLen, UINT8 *Out, CONST SIZE_T OutLen)
 {
-    BLAKE2S_STATE State;
+    BLAKE2S_CTX Ctx;
 
     if (KeyLen)
-        Blake2sInitKey(&State, OutLen, Key, KeyLen);
+        Blake2sInitKey(&Ctx, OutLen, Key, KeyLen);
     else
-        Blake2sInit(&State, OutLen);
+        Blake2sInit(&Ctx, OutLen);
 
-    Blake2sUpdate(&State, In, InLen);
-    Blake2sFinal(&State, Out);
+    Blake2sUpdate(&Ctx, In, InLen);
+    Blake2sFinal(&Ctx, Out);
 }
 
 _Use_decl_annotations_
 VOID
 Blake2s256Hmac(UINT8 *Out, CONST UINT8 *In, CONST UINT8 *Key, CONST SIZE_T InLen, CONST SIZE_T KeyLen)
 {
-    BLAKE2S_STATE State;
+    BLAKE2S_CTX Ctx;
     __declspec(align(4)) UINT8 XKey[BLAKE2S_BLOCK_SIZE] = { 0 };
     __declspec(align(4)) UINT8 IHash[BLAKE2S_HASH_SIZE];
     LONG i;
 
     if (KeyLen > BLAKE2S_BLOCK_SIZE)
     {
-        Blake2sInit(&State, BLAKE2S_HASH_SIZE);
-        Blake2sUpdate(&State, Key, KeyLen);
-        Blake2sFinal(&State, XKey);
+        Blake2sInit(&Ctx, BLAKE2S_HASH_SIZE);
+        Blake2sUpdate(&Ctx, Key, KeyLen);
+        Blake2sFinal(&Ctx, XKey);
     }
     else
         RtlCopyMemory(XKey, Key, KeyLen);
@@ -1406,18 +1406,18 @@ Blake2s256Hmac(UINT8 *Out, CONST UINT8 *In, CONST UINT8 *Key, CONST SIZE_T InLen
     for (i = 0; i < BLAKE2S_BLOCK_SIZE; ++i)
         XKey[i] ^= 0x36;
 
-    Blake2sInit(&State, BLAKE2S_HASH_SIZE);
-    Blake2sUpdate(&State, XKey, BLAKE2S_BLOCK_SIZE);
-    Blake2sUpdate(&State, In, InLen);
-    Blake2sFinal(&State, IHash);
+    Blake2sInit(&Ctx, BLAKE2S_HASH_SIZE);
+    Blake2sUpdate(&Ctx, XKey, BLAKE2S_BLOCK_SIZE);
+    Blake2sUpdate(&Ctx, In, InLen);
+    Blake2sFinal(&Ctx, IHash);
 
     for (i = 0; i < BLAKE2S_BLOCK_SIZE; ++i)
         XKey[i] ^= 0x5c ^ 0x36;
 
-    Blake2sInit(&State, BLAKE2S_HASH_SIZE);
-    Blake2sUpdate(&State, XKey, BLAKE2S_BLOCK_SIZE);
-    Blake2sUpdate(&State, IHash, BLAKE2S_HASH_SIZE);
-    Blake2sFinal(&State, IHash);
+    Blake2sInit(&Ctx, BLAKE2S_HASH_SIZE);
+    Blake2sUpdate(&Ctx, XKey, BLAKE2S_BLOCK_SIZE);
+    Blake2sUpdate(&Ctx, IHash, BLAKE2S_HASH_SIZE);
+    Blake2sFinal(&Ctx, IHash);
 
     RtlCopyMemory(Out, IHash, BLAKE2S_HASH_SIZE);
     RtlSecureZeroMemory(XKey, BLAKE2S_BLOCK_SIZE);

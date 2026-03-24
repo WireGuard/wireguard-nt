@@ -34,7 +34,7 @@ static LONG64 KeypairCounter = 0;
 #endif
 VOID NoiseDriverEntry(VOID)
 {
-    BLAKE2S_STATE Blake;
+    BLAKE2S_CTX Blake;
 
     Blake2s(NULL, 0, HandshakeName, sizeof(HandshakeName), HandshakeInitChainingKey, NOISE_HASH_LEN);
     Blake2sInit(&Blake, NOISE_HASH_LEN);
@@ -445,7 +445,7 @@ MixHash(
     _In_reads_bytes_(SrcLen) CONST UINT8 *Src,
     _In_ SIZE_T SrcLen)
 {
-    BLAKE2S_STATE Blake;
+    BLAKE2S_CTX Blake;
 
     Blake2sInit(&Blake, NOISE_HASH_LEN);
     Blake2sUpdate(&Blake, Hash, NOISE_HASH_LEN);

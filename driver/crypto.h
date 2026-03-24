@@ -219,7 +219,7 @@ enum BLAKE2S_LENGTHS
     BLAKE2S_KEY_SIZE = 32
 };
 
-typedef struct _BLAKE2S_STATE
+typedef struct _BLAKE2S_CTX
 {
     UINT32 H[8];
     UINT32 T[2];
@@ -227,23 +227,23 @@ typedef struct _BLAKE2S_STATE
     UINT8 Buf[BLAKE2S_BLOCK_SIZE];
     ULONG BufLen;
     ULONG OutLen;
-} BLAKE2S_STATE;
+} BLAKE2S_CTX;
 
 VOID
-Blake2sInit(_Out_ BLAKE2S_STATE *State, _In_ CONST SIZE_T OutLen);
+Blake2sInit(_Out_ BLAKE2S_CTX *Ctx, _In_ CONST SIZE_T OutLen);
 
 VOID
 Blake2sInitKey(
-    _Out_ BLAKE2S_STATE *State,
+    _Out_ BLAKE2S_CTX *Ctx,
     _In_ CONST SIZE_T OutLen,
     _In_reads_bytes_(KeyLen) CONST UINT8 *Key,
     _In_ CONST SIZE_T KeyLen);
 
 VOID
-Blake2sUpdate(_Inout_ BLAKE2S_STATE *State, _In_reads_bytes_(InLen) CONST UINT8 *In, _In_ SIZE_T InLen);
+Blake2sUpdate(_Inout_ BLAKE2S_CTX *Ctx, _In_reads_bytes_(InLen) CONST UINT8 *In, _In_ SIZE_T InLen);
 
 VOID
-Blake2sFinal(_Inout_ BLAKE2S_STATE *State, _Out_writes_bytes_all_(State->OutLen) UINT8 *Out);
+Blake2sFinal(_Inout_ BLAKE2S_CTX *Ctx, _Out_writes_bytes_all_(Ctx->OutLen) UINT8 *Out);
 
 VOID
 Blake2s(

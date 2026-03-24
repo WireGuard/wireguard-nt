@@ -4965,30 +4965,30 @@ ChaCha20Poly1305SelftestEncryptBigNonce(
     CONST UINT8 Key[CHACHA20POLY1305_KEY_SIZE],
     CONST SIMD_STATE *Simd)
 {
-    POLY1305_CTX Poly1305State;
-    CHACHA20_CTX ChaCha20State;
+    POLY1305_CTX Poly1305Ctx;
+    CHACHA20_CTX ChaCha20Ctx;
     union
     {
         UINT8 Block0[POLY1305_KEY_SIZE];
         UINT64_LE Lens[2];
     } b = { { 0 } };
 
-    ChaCha20Init(&ChaCha20State, Key, 0);
-    ChaCha20State.Counter[1] = GetUnalignedLe32(Nonce + 0);
-    ChaCha20State.Counter[2] = GetUnalignedLe32(Nonce + 4);
-    ChaCha20State.Counter[3] = GetUnalignedLe32(Nonce + 8);
-    ChaCha20(&ChaCha20State, b.Block0, b.Block0, sizeof(b.Block0), Simd);
-    Poly1305Init(&Poly1305State, b.Block0, Simd);
-    Poly1305Update(&Poly1305State, Ad, AdLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - AdLen) & 0xf);
-    ChaCha20(&ChaCha20State, Dst, Src, SrcLen, Simd);
-    Poly1305Update(&Poly1305State, Dst, SrcLen);
-    Poly1305Update(&Poly1305State, Pad0, (0x10 - SrcLen) & 0xf);
+    ChaCha20Init(&ChaCha20Ctx, Key, 0);
+    ChaCha20Ctx.Counter[1] = GetUnalignedLe32(Nonce + 0);
+    ChaCha20Ctx.Counter[2] = GetUnalignedLe32(Nonce + 4);
+    ChaCha20Ctx.Counter[3] = GetUnalignedLe32(Nonce + 8);
+    ChaCha20(&ChaCha20Ctx, b.Block0, b.Block0, sizeof(b.Block0), Simd);
+    Poly1305Init(&Poly1305Ctx, b.Block0, Simd);
+    Poly1305Update(&Poly1305Ctx, Ad, AdLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - AdLen) & 0xf);
+    ChaCha20(&ChaCha20Ctx, Dst, Src, SrcLen, Simd);
+    Poly1305Update(&Poly1305Ctx, Dst, SrcLen);
+    Poly1305Update(&Poly1305Ctx, Pad0, (0x10 - SrcLen) & 0xf);
     b.Lens[0] = CpuToLe64(AdLen);
     b.Lens[1] = CpuToLe64(SrcLen);
-    Poly1305Update(&Poly1305State, (UINT8 *)b.Lens, sizeof(b.Lens));
-    Poly1305Final(&Poly1305State, Dst + SrcLen);
-    RtlSecureZeroMemory(&ChaCha20State, sizeof(ChaCha20State));
+    Poly1305Update(&Poly1305Ctx, (UINT8 *)b.Lens, sizeof(b.Lens));
+    Poly1305Final(&Poly1305Ctx, Dst + SrcLen);
+    RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&b, sizeof(b));
 }
 
