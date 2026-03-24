@@ -34,7 +34,7 @@ _Post_maybenull_
 _Must_inspect_result_
 _Post_writable_byte_size_(NumberOfBytes)
 _Return_type_success_(return != NULL)
-_At_buffer_((UCHAR *)return, _Iter_, NumberOfBytes, _Post_satisfies_(((UCHAR *)return )[_Iter_] == 0))
+_At_buffer_((UCHAR *)return, _Iter_, NumberOfBytes, _Post_satisfies_(((UCHAR *)return)[_Iter_] == 0))
 static inline __drv_allocatesMem(Mem)
 VOID *
 MemAllocateAndZero(_In_ SIZE_T NumberOfBytes)
@@ -66,7 +66,7 @@ _At_buffer_(
     (UCHAR *)return,
     _Iter_,
     NumberOfElements *SizeOfOneElement,
-    _Post_satisfies_(((UCHAR *)return )[_Iter_] == 0))
+    _Post_satisfies_(((UCHAR *)return)[_Iter_] == 0))
 static inline __drv_allocatesMem(Mem)
 VOID *
 MemAllocateArrayAndZero(_In_ SIZE_T NumberOfElements, _In_ SIZE_T SizeOfOneElement)

@@ -6,7 +6,7 @@
 #pragma once
 
 #define SYS_TIME_UNITS_PER_SEC 10000000 /* System time unit is 100 ns. */
-#define SEC_TO_SYS_TIME_UNITS(Sec) ((LONG64)(Sec)*SYS_TIME_UNITS_PER_SEC)
+#define SEC_TO_SYS_TIME_UNITS(Sec) ((LONG64)(Sec) * SYS_TIME_UNITS_PER_SEC)
 
 typedef struct _TIMER
 {
