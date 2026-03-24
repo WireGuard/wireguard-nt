@@ -1,7 +1,7 @@
 ; SPDX-License-Identifier: GPL-2.0 OR MIT
 ;
 ; Copyright (C) 2006-2020 Andy Polyakov <appro@cryptogams.org>.
-; Copyright (C) 2015-2021 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+; Copyright (C) 2015-2026 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 ;
 ; This is a modified version of:
 ;     https://github.com/dot-asm/cryptogams/blob/master/x86_64/chacha-x86_64.pl

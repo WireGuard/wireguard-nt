@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0
  *
- * Copyright (C) 2015-2021 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+ * Copyright (C) 2015-2026 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  */
 
 #include "crypto.h"
@@ -1846,7 +1846,7 @@ Hsiphash4u32(CONST UINT32 First, CONST UINT32 Second, CONST UINT32 Third, CONST 
 /* Below here is fiat's implementation of x25519.
  *
  * Copyright (C) 2015-2016 The fiat-crypto Authors.
- * Copyright (C) 2018-2021 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+ * Copyright (C) 2018-2026 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  *
  * This is a machine-generated formally verified implementation of Curve25519
  * ECDH from: <https://github.com/mit-plv/fiat-crypto>. Though originally

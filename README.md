@@ -343,4 +343,4 @@ General requirements:
 
 ## License
 
-The entire contents of [this repository](https://git.zx2c4.com/wireguard-nt/), including all documentation and example code, is "Copyright © 2018-2021 WireGuard LLC. All Rights Reserved." Source code is licensed under the [GPLv2](COPYING). Prebuilt binaries from [the wireguard-nt download server](https://download.wireguard.com/wireguard-nt/) are released under a more permissive license suitable for more forms of software contained inside of the .zip files distributed there.
+The entire contents of [this repository](https://git.zx2c4.com/wireguard-nt/), including all documentation and example code, is "Copyright © 2018-2026 WireGuard LLC. All Rights Reserved." Source code is licensed under the [GPLv2](COPYING). Prebuilt binaries from [the wireguard-nt download server](https://download.wireguard.com/wireguard-nt/) are released under a more permissive license suitable for more forms of software contained inside of the .zip files distributed there.
