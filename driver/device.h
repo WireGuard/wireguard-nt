@@ -92,7 +92,6 @@ typedef struct _WG_DEVICE
     ULONG HandshakeRxQueueLen;
     LOG_RING Log;
     LIST_ENTRY DeviceList;
-    KEVENT DeviceRemoved;
 } WG_DEVICE;
 
 _Requires_lock_held_(Wg->DeviceUpdateLock)
