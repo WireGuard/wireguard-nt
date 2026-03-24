@@ -13,21 +13,10 @@
 #include <SetupAPI.h>
 #include <Shlwapi.h>
 #include <wchar.h>
-#include <initguid.h> /* Keep these two at bottom in this order, so that we only generate extra GUIDs for devpkey. The other keys we'll get from uuid.lib like usual. */
+#include <initguid.h> /* Keep these at the bottom in this order, so that we only generate extra GUIDs for devpkey. The other keys we'll get from uuid.lib like usual. */
 #include <devpkey.h>
-
-/* We pretend we're Windows 8, and then hack around the limitation in Windows 7 below. */
-#if NTDDI_VERSION == NTDDI_WIN7
-#    undef NTDDI_VERSION
-#    define NTDDI_VERSION NTDDI_WIN8
-#    include <devquery.h>
-#    include <swdevice.h>
-#    undef NTDDI_VERSION
-#    define NTDDI_VERSION NTDDI_WIN7
-#else
-#    include <devquery.h>
-#    include <swdevice.h>
-#endif
+#include <devquery.h>
+#include <swdevice.h>
 
 #include "adapter.h"
 #include "driver.h"
@@ -38,7 +27,6 @@
 #include "ntdll.h"
 #include "rundll32.h"
 #include "registry.h"
-#include "adapter_win7.h"
 
 #pragma warning(disable : 4221) /* nonstandard: address of automatic in initializer */
 
@@ -133,12 +121,6 @@ VOID AdapterCleanupOrphanedDevices(VOID)
     {
         LOG_LAST_ERROR(L"Failed to take device installation mutex");
         return;
-    }
-
-    if (IsWindows7)
-    {
-        AdapterCleanupOrphanedDevicesWin7();
-        goto cleanupDeviceInstallationMutex;
     }
 
     HDEVINFO DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, 0, NULL, NULL, NULL);
@@ -441,9 +423,6 @@ static _Return_type_success_(return != FALSE)
 BOOL
 WaitForInterface(_In_ WCHAR *InstanceId)
 {
-    if (IsWindows7)
-        return TRUE;
-
     DWORD LastError = ERROR_SUCCESS;
     static const DEVPROP_BOOLEAN DevPropTrue = DEVPROP_TRUE;
     const DEVPROP_FILTER_EXPRESSION Filters[] = { { .Operator = DEVPROP_OPERATOR_EQUALS_IGNORE_CASE,
@@ -593,18 +572,6 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
         goto cleanupAdapter;
     }
 
-    if (IsWindows7)
-    {
-        if (!CreateAdapterWin7(Adapter, Name, TunnelTypeName))
-        {
-            LastError = GetLastError();
-            goto cleanupCreateContext;
-        }
-        goto skipSwDevice;
-    }
-    if (!IsWindows10)
-        goto skipStub;
-
     SW_DEVICE_CREATE_INFO StubCreateInfo = { .cbSize = sizeof(StubCreateInfo),
                                              .pszInstanceId = InstanceIdStr,
                                              .pszzHardwareIds = L"",
@@ -667,7 +634,6 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
     SwDeviceClose(Adapter->SwDevice);
     Adapter->SwDevice = NULL;
 
-skipStub:;
     static const WCHAR Hwids[_countof(WIREGUARD_HWID) + 1 /*Multi-string terminator*/] = WIREGUARD_HWID;
     SW_DEVICE_CREATE_INFO CreateInfo = { .cbSize = sizeof(CreateInfo),
                                          .pszInstanceId = InstanceIdStr,
@@ -764,7 +730,6 @@ skipStub:;
         goto cleanupCreateContext;
     }
 
-skipSwDevice:
     Adapter->DevInfo = SetupDiCreateDeviceInfoListExW(&GUID_DEVCLASS_NET, NULL, NULL, NULL);
     if (Adapter->DevInfo == INVALID_HANDLE_VALUE)
     {
@@ -793,9 +758,6 @@ skipSwDevice:
         LastError = LOG(WIREGUARD_LOG_ERR, L"Failed to set adapter name \"%s\"", Name);
         goto cleanupCreateContext;
     }
-
-    if (IsWindows7)
-        CreateAdapterPostWin7(Adapter, TunnelTypeName);
 
 cleanupCreateContext:
     CloseHandle(CreateContext.Triggered);

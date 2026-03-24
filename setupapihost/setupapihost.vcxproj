@@ -23,13 +23,11 @@
       <DelayLoadDLLs>setupapi.dll;shell32.dll</DelayLoadDLLs>
       <AdditionalDependencies>Setupapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
+      <MinimumRequiredVersion>$(SUBSYSTEM_NATVER)</MinimumRequiredVersion>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="host.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="host_win7.h" />
   </ItemGroup>
   <Import Project="..\wireguard-nt.props.user" Condition="exists('..\wireguard-nt.props.user')" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

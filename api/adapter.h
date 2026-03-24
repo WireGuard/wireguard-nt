@@ -12,7 +12,7 @@
 #include <Windows.h>
 
 #define WIREGUARD_HWID L"WireGuard"
-#define WIREGUARD_ENUMERATOR (IsWindows7 ? L"ROOT\\" WIREGUARD_HWID : L"SWD\\" WIREGUARD_HWID)
+#define WIREGUARD_ENUMERATOR L"SWD\\" WIREGUARD_HWID
 
 extern const DEVPROPKEY DEVPKEY_WireGuard_Name;
 
@@ -87,11 +87,6 @@ AdapterGetDeviceObjectFileName(_In_z_ LPCWSTR InstanceId);
  * Cleans up adapters with no attached process.
  */
 VOID AdapterCleanupOrphanedDevices(VOID);
-
-/**
- * Cleans up adapters that use the old enumerator.
- */
-VOID AdapterCleanupLegacyDevices(VOID);
 
 /**
  * Removes the specified device instance.

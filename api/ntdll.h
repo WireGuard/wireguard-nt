@@ -40,18 +40,6 @@ typedef struct _KEY_NAME_INFORMATION
 
 #define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L) // TODO: #include <ntstatus.h> instead of this
 
-/* We can't use RtlGetVersion, because appcompat's aclayers.dll shims it to report Vista
- * when run from legacy contexts. So, we instead use the undocumented RtlGetNtVersionNumbers.
- *
- * Another way would be reading from the PEB directly:
- *   ((DWORD *)NtCurrentTeb()->ProcessEnvironmentBlock)[sizeof(VOID *) == 8 ? 70 : 41]
- * Or just read from KUSER_SHARED_DATA the same way on 32-bit and 64-bit:
- *    *(DWORD *)0x7FFE026C
- */
-EXTERN_C
-DECLSPEC_IMPORT VOID NTAPI
-RtlGetNtVersionNumbers(_Out_opt_ DWORD *MajorVersion, _Out_opt_ DWORD *MinorVersion, _Out_opt_ DWORD *BuildNumber);
-
 EXTERN_C
 DECLSPEC_IMPORT DWORD NTAPI
 NtQueryKey(

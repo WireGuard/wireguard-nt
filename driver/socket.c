@@ -3,16 +3,9 @@
  * Copyright (C) 2015-2026 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  */
 
-/* We pretend we're Windows 8, and then hack around the limitation in Windows 7 below. */
 #include <ntifs.h> /* Must be included before <wdm.h> */
 #include <wdm.h>
-#if NTDDI_VERSION == NTDDI_WIN7
-#    undef NTDDI_VERSION
-#    define NTDDI_VERSION NTDDI_WIN8
-#    include <wsk.h>
-#    undef NTDDI_VERSION
-#    define NTDDI_VERSION NTDDI_WIN7
-#endif
+#include <wsk.h>
 
 #include "device.h"
 #include "messages.h"
@@ -79,73 +72,6 @@ BufferSendComplete(DEVICE_OBJECT *DeviceObject, IRP *Irp, VOID *VoidCtx)
     ExFreeToLookasideListEx(&SocketSendCtxCache, Ctx);
     return STATUS_MORE_PROCESSING_REQUIRED;
 }
-
-#if NTDDI_VERSION == NTDDI_WIN7
-static BOOLEAN NoWskSendMessages;
-
-typedef struct _POLYFILLED_SOCKET_SEND_CTX
-{
-    WSK_IRP;
-    IRP *OriginalIrp;
-    LONG *RefCount;
-} POLYFILLED_SOCKET_SEND_CTX;
-
-static IO_COMPLETION_ROUTINE PolyfilledSendComplete;
-_Use_decl_annotations_
-static NTSTATUS
-PolyfilledSendComplete(DEVICE_OBJECT *DeviceObject, IRP *Irp, VOID *VoidCtx)
-{
-    POLYFILLED_SOCKET_SEND_CTX *Ctx = VoidCtx;
-    _Analysis_assume_(Ctx);
-    if (!InterlockedDecrement(Ctx->RefCount))
-    {
-        IO_STACK_LOCATION *Stack = IoGetNextIrpStackLocation(Ctx->OriginalIrp);
-        if (Stack && Stack->CompletionRoutine)
-            Stack->CompletionRoutine(DeviceObject, Ctx->OriginalIrp, Stack->Context);
-        MemFree(Ctx->RefCount);
-    }
-    MemFree(Ctx);
-    return STATUS_MORE_PROCESSING_REQUIRED;
-}
-
-static NTSTATUS
-PolyfilledWskSendMessages(
-    _In_ PWSK_SOCKET Socket,
-    _In_ PWSK_BUF_LIST BufferList,
-    _Reserved_ ULONG Flags,
-    _In_opt_ PSOCKADDR RemoteAddress,
-    _In_ ULONG ControlInfoLength,
-    _In_reads_bytes_opt_(ControlInfoLength) PCMSGHDR ControlInfo,
-    _Inout_ PIRP Irp)
-{
-#    pragma warning(suppress : 6014) /* `RefCount` is freed in PolyfilledSendComplete. */
-    LONG *RefCount = MemAllocate(sizeof(*RefCount));
-    if (!RefCount)
-        return STATUS_INSUFFICIENT_RESOURCES;
-    WriteNoFence(RefCount, 1);
-    for (WSK_BUF_LIST *Buf = BufferList; Buf; Buf = Buf->Next)
-    {
-        POLYFILLED_SOCKET_SEND_CTX *Ctx = MemAllocate(sizeof(*Ctx));
-        if (!Ctx)
-            continue;
-        Ctx->RefCount = RefCount;
-        Ctx->OriginalIrp = Irp;
-        IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
-        IoSetCompletionRoutine(&Ctx->Irp, PolyfilledSendComplete, Ctx, TRUE, TRUE, TRUE);
-        InterlockedIncrement(RefCount);
-        ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Dispatch)
-            ->WskSendTo(Socket, &Buf->Buffer, Flags, RemoteAddress, ControlInfoLength, ControlInfo, &Ctx->Irp);
-    }
-    if (!InterlockedDecrement(RefCount))
-    {
-        IO_STACK_LOCATION *Stack = IoGetNextIrpStackLocation(Irp);
-        if (Stack && Stack->CompletionRoutine)
-            Stack->CompletionRoutine((DEVICE_OBJECT *)Socket, Irp, Stack->Context);
-        MemFree(RefCount);
-    }
-    return STATUS_SUCCESS;
-}
-#endif
 
 static BOOLEAN
 CidrMaskMatchV4(_In_ CONST IN_ADDR *Addr, _In_ CONST IP_ADDRESS_PREFIX *Prefix)
@@ -331,12 +257,7 @@ SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepaliv
         Status = STATUS_NETWORK_UNREACHABLE;
         goto cleanupRcuLock;
     }
-    PFN_WSK_SEND_MESSAGES WskSendMessages = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskSendMessages;
-#if NTDDI_VERSION == NTDDI_WIN7
-    if (NoWskSendMessages)
-        WskSendMessages = PolyfilledWskSendMessages;
-#endif
-    Status = WskSendMessages(
+    Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Socket->Sock->Dispatch)->WskSendMessages(
         Socket->Sock,
         FirstWskBuf,
         0,
@@ -847,13 +768,6 @@ static NTSTATUS WskInit(VOID)
     Status = ReadNoFence(&WskInitStatus);
     if (Status != STATUS_RETRY)
         goto cleanupIniting;
-
-#if NTDDI_VERSION == NTDDI_WIN7
-    RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
-    NoWskSendMessages =
-        NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
-        (OsVersionInfo.dwMajorVersion < 6 || (OsVersionInfo.dwMajorVersion == 6 && OsVersionInfo.dwMinorVersion < 2));
-#endif
 
     Status = ExInitializeLookasideListEx(
         &SocketSendCtxCache, NULL, NULL, NonPagedPool, 0, sizeof(SOCKET_SEND_CTX), MEMORY_TAG, 0);

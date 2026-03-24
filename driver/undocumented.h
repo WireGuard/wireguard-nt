@@ -14,3 +14,7 @@ NTSTATUS NTAPI ZwYieldExecution(VOID);
 NTSYSAPI
 BOOLEAN NTAPI
 SystemPrng(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len);
+
+NTSYSAPI
+PVOID NTAPI
+NdisWdfGetAdapterContextFromAdapterHandle(_In_ PVOID DeviceExtension);

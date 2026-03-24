@@ -412,12 +412,8 @@ RegisterAdapter(_In_ NDIS_HANDLE MiniportAdapterHandle, _In_ __drv_aliasesMem WG
 {
     NDIS_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES AdapterRegistrationAttributes = {
         .Header = { .Type = NDIS_OBJECT_TYPE_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES,
-                    .Revision = NdisVersion < NDIS_RUNTIME_VERSION_630
-                                    ? NDIS_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_1
-                                    : NDIS_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_2,
-                    .Size = NdisVersion < NDIS_RUNTIME_VERSION_630
-                                ? NDIS_SIZEOF_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_1
-                                : NDIS_SIZEOF_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_2 },
+                    .Revision = NDIS_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_2,
+                    .Size = NDIS_SIZEOF_MINIPORT_ADAPTER_REGISTRATION_ATTRIBUTES_REVISION_2 },
         .AttributeFlags = NDIS_MINIPORT_ATTRIBUTES_NO_HALT_ON_SUSPEND | NDIS_MINIPORT_ATTRIBUTES_SURPRISE_REMOVE_OK,
         .InterfaceType = NdisInterfaceInternal,
         .MiniportAdapterContext = Wg
@@ -429,10 +425,8 @@ RegisterAdapter(_In_ NDIS_HANDLE MiniportAdapterHandle, _In_ __drv_aliasesMem WG
 
     NDIS_PM_CAPABILITIES PmCapabilities = {
         .Header = { .Type = NDIS_OBJECT_TYPE_DEFAULT,
-                    .Revision = NdisVersion < NDIS_RUNTIME_VERSION_630 ? NDIS_PM_CAPABILITIES_REVISION_1
-                                                                       : NDIS_PM_CAPABILITIES_REVISION_2,
-                    .Size = NdisVersion < NDIS_RUNTIME_VERSION_630 ? NDIS_SIZEOF_NDIS_PM_CAPABILITIES_REVISION_1
-                                                                   : NDIS_SIZEOF_NDIS_PM_CAPABILITIES_REVISION_2 },
+                    .Revision = NDIS_PM_CAPABILITIES_REVISION_2,
+                    .Size = NDIS_SIZEOF_NDIS_PM_CAPABILITIES_REVISION_2 },
         .MinMagicPacketWakeUp = NdisDeviceStateUnspecified,
         .MinPatternWakeUp = NdisDeviceStateUnspecified,
         .MinLinkChangeWakeUp = NdisDeviceStateUnspecified
@@ -494,16 +488,16 @@ RegisterAdapter(_In_ NDIS_HANDLE MiniportAdapterHandle, _In_ __drv_aliasesMem WG
 
     NDIS_OFFLOAD Offload = {
         .Header = { .Type = NDIS_OBJECT_TYPE_OFFLOAD,
-                    .Revision = NdisVersion < NDIS_RUNTIME_VERSION_630   ? NDIS_OFFLOAD_REVISION_2
-                                : NdisVersion < NDIS_RUNTIME_VERSION_650 ? NDIS_OFFLOAD_REVISION_3
-                                : NdisVersion < NDIS_RUNTIME_VERSION_670 ? NDIS_OFFLOAD_REVISION_4
+                    .Revision = NdisVersion < NDIS_RUNTIME_VERSION_670   ? NDIS_OFFLOAD_REVISION_4
                                 : NdisVersion < NDIS_RUNTIME_VERSION_683 ? NDIS_OFFLOAD_REVISION_5
-                                                                         : NDIS_OFFLOAD_REVISION_6,
-                    .Size = NdisVersion < NDIS_RUNTIME_VERSION_630   ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_2
-                            : NdisVersion < NDIS_RUNTIME_VERSION_650 ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_3
-                            : NdisVersion < NDIS_RUNTIME_VERSION_670 ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_4
+                                : NdisVersion < NDIS_RUNTIME_VERSION_685 ? NDIS_OFFLOAD_REVISION_6
+                                : NdisVersion < NDIS_RUNTIME_VERSION_689 ? NDIS_OFFLOAD_REVISION_7
+                                                                         : NDIS_OFFLOAD_REVISION_8,
+                    .Size = NdisVersion < NDIS_RUNTIME_VERSION_670   ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_4
                             : NdisVersion < NDIS_RUNTIME_VERSION_683 ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_5
-                                                                     : NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_6 },
+                            : NdisVersion < NDIS_RUNTIME_VERSION_685 ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_6
+                            : NdisVersion < NDIS_RUNTIME_VERSION_689 ? NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_7
+                                                                     : NDIS_SIZEOF_NDIS_OFFLOAD_REVISION_8 },
         .Checksum = { .IPv4Receive = { .IpOptionsSupported = NDIS_OFFLOAD_SUPPORTED,
                                        .TcpOptionsSupported = NDIS_OFFLOAD_SUPPORTED,
                                        .TcpChecksum = NDIS_OFFLOAD_SUPPORTED,
@@ -553,19 +547,6 @@ InitializeEx(
     Wg->InterfaceLuid = MiniportInitParameters->NetLuid;
     LogRingInit(&Wg->Log);
     KeInitializeEvent(&Wg->DeviceRemoved, NotificationEvent, FALSE);
-
-    NdisMGetDeviceProperty(MiniportAdapterHandle, NULL, &Wg->FunctionalDeviceObject, NULL, NULL, NULL);
-    if (!Wg->FunctionalDeviceObject)
-    {
-        Status = STATUS_INVALID_PARAMETER;
-        goto cleanupWg;
-    }
-    NT_ASSERT(!Wg->FunctionalDeviceObject->Reserved);
-    /* Reverse engineering indicates that we'd be better off calling
-     * NdisWdfGetAdapterContextFromAdapterHandle(functional_device), which points to our WG_DEVICE object
-     * directly, but this isn't available before Windows 10, so for now we just stick it into this reserved field.
-     * Revisit this when we drop support for old Windows versions. */
-    Wg->FunctionalDeviceObject->Reserved = Wg;
 
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
     ExRundownCompleted(&Wg->ItemsInFlight); /* Wait until Restart is called to mark this active. */
