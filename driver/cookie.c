@@ -86,7 +86,7 @@ ComputeMac1(
     _In_ CONST UINT8 Key[NOISE_SYMMETRIC_KEY_LEN])
 {
     Len = Len - sizeof(MESSAGE_MACS) + FIELD_OFFSET(MESSAGE_MACS, Mac1);
-    Blake2s(Mac1, Message, Key, COOKIE_LEN, Len, NOISE_SYMMETRIC_KEY_LEN);
+    Blake2s(Key, NOISE_SYMMETRIC_KEY_LEN, Message, Len, Mac1, COOKIE_LEN);
 }
 
 static VOID
@@ -97,7 +97,7 @@ ComputeMac2(
     _In_ CONST UINT8 Cookie[COOKIE_LEN])
 {
     Len = Len - sizeof(MESSAGE_MACS) + FIELD_OFFSET(MESSAGE_MACS, Mac2);
-    Blake2s(Mac2, Message, Cookie, COOKIE_LEN, Len, COOKIE_LEN);
+    Blake2s(Cookie, COOKIE_LEN, Message, Len, Mac2, COOKIE_LEN);
 }
 
 _Requires_lock_not_held_(Checker->SecretLock)

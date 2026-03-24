@@ -1372,7 +1372,7 @@ Blake2sFinal(BLAKE2S_STATE *State, UINT8 *Out)
 
 _Use_decl_annotations_
 VOID
-Blake2s(UINT8 *Out, CONST UINT8 *In, CONST UINT8 *Key, CONST SIZE_T OutLen, CONST SIZE_T InLen, CONST SIZE_T KeyLen)
+Blake2s(CONST UINT8 *Key, CONST SIZE_T KeyLen, CONST UINT8 *In, CONST SIZE_T InLen, UINT8 *Out, CONST SIZE_T OutLen)
 {
     BLAKE2S_STATE State;
 

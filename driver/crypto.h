@@ -247,12 +247,12 @@ Blake2sFinal(_Inout_ BLAKE2S_STATE *State, _Out_writes_bytes_all_(State->OutLen)
 
 VOID
 Blake2s(
-    _Out_writes_bytes_all_(OutLen) UINT8 *Out,
-    _In_reads_bytes_(InLen) CONST UINT8 *In,
     _In_reads_bytes_(KeyLen) CONST UINT8 *Key,
-    _In_ CONST SIZE_T OutLen,
+    _In_ CONST SIZE_T KeyLen,
+    _In_reads_bytes_(InLen) CONST UINT8 *In,
     _In_ CONST SIZE_T InLen,
-    _In_ CONST SIZE_T KeyLen);
+    _Out_writes_bytes_all_(OutLen) UINT8 *Out,
+    _In_ CONST SIZE_T OutLen);
 
 VOID
 Blake2s256Hmac(

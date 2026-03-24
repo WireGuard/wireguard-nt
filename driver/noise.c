@@ -36,7 +36,7 @@ VOID NoiseDriverEntry(VOID)
 {
     BLAKE2S_STATE Blake;
 
-    Blake2s(HandshakeInitChainingKey, HandshakeName, NULL, NOISE_HASH_LEN, sizeof(HandshakeName), 0);
+    Blake2s(NULL, 0, HandshakeName, sizeof(HandshakeName), HandshakeInitChainingKey, NOISE_HASH_LEN);
     Blake2sInit(&Blake, NOISE_HASH_LEN);
     Blake2sUpdate(&Blake, HandshakeInitChainingKey, NOISE_HASH_LEN);
     Blake2sUpdate(&Blake, IdentifierName, sizeof(IdentifierName));
