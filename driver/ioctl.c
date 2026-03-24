@@ -221,7 +221,9 @@ static NTSTATUS
 SetPrivateKey(_Inout_ WG_DEVICE *Wg, _In_ CONST UCHAR PrivateKey[WG_KEY_LEN])
 {
     UINT8 PublicKey[NOISE_PUBLIC_KEY_LEN];
+    BOOLEAN SendStagedPackets;
     WG_PEER *Peer, *Temp;
+
     if (CryptoEqualMemory32(Wg->StaticIdentity.StaticPrivate, PrivateKey))
         return STATUS_SUCCESS;
 
@@ -238,15 +240,19 @@ SetPrivateKey(_Inout_ WG_DEVICE *Wg, _In_ CONST UCHAR PrivateKey[WG_KEY_LEN])
     }
 
     MuAcquirePushLockExclusive(&Wg->StaticIdentity.Lock);
+    SendStagedPackets = !Wg->StaticIdentity.HasIdentity && ReadBooleanNoFence(&Wg->IsUp);
     NoiseSetStaticIdentityPrivateKey(&Wg->StaticIdentity, PrivateKey);
+    SendStagedPackets = SendStagedPackets && Wg->StaticIdentity.HasIdentity;
+    _Analysis_assume_same_lock_(Wg->CookieChecker.Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
+    CookieCheckerPrecomputeDeviceKeys(&Wg->CookieChecker);
     LIST_FOR_EACH_ENTRY_SAFE (Peer, Temp, &Wg->PeerList, WG_PEER, PeerList)
     {
         _Analysis_assume_same_lock_(Peer->Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
         NoisePrecomputeStaticStatic(Peer);
         NoiseExpireCurrentPeerKeypairs(Peer);
+        if (SendStagedPackets)
+            PacketSendStagedPackets(Peer);
     }
-    _Analysis_assume_same_lock_(Wg->CookieChecker.Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
-    CookieCheckerPrecomputeDeviceKeys(&Wg->CookieChecker);
     MuReleasePushLockExclusive(&Wg->StaticIdentity.Lock);
     return STATUS_SUCCESS;
 }
