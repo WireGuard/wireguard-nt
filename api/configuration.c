@@ -152,6 +152,13 @@ static_assert(
 static_assert(
     RTL_FIELD_SIZE(WG_IOCTL_ALLOWED_IP, Address) == RTL_FIELD_SIZE(WIREGUARD_ALLOWED_IP, Address),
     "AllowedIp->Address struct mismatch");
+static_assert(
+    offsetof(WG_IOCTL_ALLOWED_IP, Flags) == offsetof(WIREGUARD_ALLOWED_IP, Flags),
+    "AllowedIp->Flags struct mismatch");
+static_assert(
+    RTL_FIELD_SIZE(WG_IOCTL_ALLOWED_IP, Flags) == RTL_FIELD_SIZE(WIREGUARD_ALLOWED_IP, Flags),
+    "AllowedIp->Flags struct mismatch");
+static_assert(WG_IOCTL_ALLOWED_IP_REMOVE == WIREGUARD_ALLOWED_IP_REMOVE, "ALLOWED_IP_REMOVE flag mismatch");
 static_assert(sizeof(WG_IOCTL_ADAPTER_STATE) == sizeof(WIREGUARD_ADAPTER_STATE), "Adapter state mismatch");
 static_assert(WG_IOCTL_ADAPTER_STATE_DOWN == WIREGUARD_ADAPTER_STATE_DOWN, "Adapter state down mismatch");
 static_assert(WG_IOCTL_ADAPTER_STATE_UP == WIREGUARD_ADAPTER_STATE_UP, "Adapter state up mismatch");

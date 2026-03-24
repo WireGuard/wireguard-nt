@@ -354,19 +354,39 @@ SetPeer(_Inout_ WG_DEVICE *Wg, _Inout_ CONST volatile WG_IOCTL_PEER **UnsafeIoct
     {
         WG_IOCTL_ALLOWED_IP IoctlAllowedIp = UnsafeIoctlAllowedIp[i];
         if (IoctlAllowedIp.AddressFamily == AF_INET && IoctlAllowedIp.Cidr <= 32)
-            Status = AllowedIpsInsertV4(
-                &Peer->Device->PeerAllowedIps,
-                &IoctlAllowedIp.Address.V4,
-                IoctlAllowedIp.Cidr,
-                Peer,
-                &Wg->DeviceUpdateLock);
+        {
+            if (IoctlAllowedIp.Flags & WG_IOCTL_ALLOWED_IP_REMOVE)
+                Status = AllowedIpsRemoveV4(
+                    &Peer->Device->PeerAllowedIps,
+                    &IoctlAllowedIp.Address.V4,
+                    IoctlAllowedIp.Cidr,
+                    Peer,
+                    &Wg->DeviceUpdateLock);
+            else
+                Status = AllowedIpsInsertV4(
+                    &Peer->Device->PeerAllowedIps,
+                    &IoctlAllowedIp.Address.V4,
+                    IoctlAllowedIp.Cidr,
+                    Peer,
+                    &Wg->DeviceUpdateLock);
+        }
         else if (IoctlAllowedIp.AddressFamily == AF_INET6 && IoctlAllowedIp.Cidr <= 128)
-            Status = AllowedIpsInsertV6(
-                &Peer->Device->PeerAllowedIps,
-                &IoctlAllowedIp.Address.V6,
-                IoctlAllowedIp.Cidr,
-                Peer,
-                &Wg->DeviceUpdateLock);
+        {
+            if (IoctlAllowedIp.Flags & WG_IOCTL_ALLOWED_IP_REMOVE)
+                 Status = AllowedIpsRemoveV6(
+                    &Peer->Device->PeerAllowedIps,
+                    &IoctlAllowedIp.Address.V6,
+                    IoctlAllowedIp.Cidr,
+                    Peer,
+                    &Wg->DeviceUpdateLock);
+            else
+                Status = AllowedIpsInsertV6(
+                    &Peer->Device->PeerAllowedIps,
+                    &IoctlAllowedIp.Address.V6,
+                    IoctlAllowedIp.Cidr,
+                    Peer,
+                    &Wg->DeviceUpdateLock);
+        }
         else
             Status = STATUS_INVALID_PARAMETER;
         if (!NT_SUCCESS(Status))

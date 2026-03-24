@@ -56,6 +56,9 @@ static WG_PEER *InitPeer(VOID)
 #define Insert(Version, Mem, Ipa, Ipb, Ipc, Ipd, Cidr) \
     AllowedIpsInsertV##Version(&t, Ip##Version(Ipa, Ipb, Ipc, Ipd), Cidr, Mem, &Mutex)
 
+#define Remove(Version, Mem, Ipa, Ipb, Ipc, Ipd, Cidr) \
+    AllowedIpsRemoveV##Version(&t, Ip##Version(Ipa, Ipb, Ipc, Ipd), Cidr, Mem, &Mutex)
+
 #define MaybeFail() \
     do \
     { \
@@ -183,6 +186,51 @@ AllowedIpsSelftest(VOID)
     TestNegative(4, A, 128, 0, 0, 0);
     TestNegative(4, A, 192, 0, 0, 0);
     TestNegative(4, A, 255, 0, 0, 0);
+
+    Insert(4, A, 1, 0, 0, 0, 32);
+    Insert(4, A, 192, 0, 0, 0, 24);
+    Insert(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 128);
+    Insert(6, A, 0x24446800, 0xf0e40800, 0xeeaebeef, 0, 98);
+    Test(4, A, 1, 0, 0, 0);
+    Test(4, A, 192, 0, 0, 1);
+    Test(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    Test(6, A, 0x24446800, 0xf0e40800, 0xeeaebeef, 0x10101010);
+    /* Must be an exact match to remove */
+    Remove(4, A, 192, 0, 0, 0, 32);
+    Test(4, A, 192, 0, 0, 1);
+    /* NULL peer should have no effect and return success */
+#pragma warning(suppress : 6387) /* Second argument to Remove shouldn't be NULL */
+    TestBoolean(Remove(4, NULL, 192, 0, 0, 0, 24) == STATUS_SUCCESS);
+    Test(4, A, 192, 0, 0, 1);
+    /* different peer should have no effect and return success */
+    TestBoolean(Remove(4, B, 192, 0, 0, 0, 24) == STATUS_SUCCESS);
+    Test(4, A, 192, 0, 0, 1);
+    /* invalid CIDR should have no effect and return invalid param */
+    TestBoolean(Remove(4, B, 192, 0, 0, 0, 33) == STATUS_INVALID_PARAMETER);
+    Test(4, A, 192, 0, 0, 1);
+    Remove(4, A, 192, 0, 0, 0, 24);
+    TestNegative(4, A, 192, 0, 0, 1);
+    Remove(4, A, 1, 0, 0, 0, 32);
+    TestNegative(4, A, 1, 0, 0, 0);
+    /* Must be an exact match to remove */
+    Remove(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 96);
+    Test(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    /* NULL peer should have no effect and return success */
+    TestBoolean(Remove(6, NULL, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 128) == STATUS_SUCCESS);
+    Test(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    /* different peer should have no effect and return success */
+    TestBoolean(Remove(6, B, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 128) == STATUS_SUCCESS);
+    Test(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    /* invalid CIDR should have no effect and return invalid param */
+    TestBoolean(Remove(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 129) == STATUS_INVALID_PARAMETER);
+    Test(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    Remove(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef, 128);
+    TestNegative(6, A, 0x24446801, 0x40e40800, 0xdeaebeef, 0xdefbeef);
+    /* Must match the peer to remove */
+    Remove(6, B, 0x24446800, 0xf0e40800, 0xeeaebeef, 0, 98);
+    Test(6, A, 0x24446800, 0xf0e40800, 0xeeaebeef, 0x10101010);
+    Remove(6, A, 0x24446800, 0xf0e40800, 0xeeaebeef, 0, 98);
+    TestNegative(6, A, 0x24446800, 0xf0e40800, 0xeeaebeef, 0x10101010);
 
     AllowedIpsFree(&t, &Mutex);
     AllowedIpsInit(&t);

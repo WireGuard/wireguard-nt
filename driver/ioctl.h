@@ -22,6 +22,11 @@
 
 #define WG_KEY_LEN 32
 
+typedef enum
+{
+    WG_IOCTL_ALLOWED_IP_REMOVE = 1 << 0
+} WG_IOCTL_ALLOWED_IP_FLAG;
+
 typedef __declspec(align(8)) struct _WG_IOCTL_ALLOWED_IP
 {
     union
@@ -31,6 +36,7 @@ typedef __declspec(align(8)) struct _WG_IOCTL_ALLOWED_IP
     } Address;
     ADDRESS_FAMILY AddressFamily;
     UCHAR Cidr;
+    WG_IOCTL_ALLOWED_IP_FLAG Flags;
 } WG_IOCTL_ALLOWED_IP;
 
 typedef enum

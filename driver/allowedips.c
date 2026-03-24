@@ -304,6 +304,59 @@ Add(_Inout_ ALLOWEDIPS_NODE __rcu **Trie,
     return STATUS_SUCCESS;
 }
 
+_Requires_lock_held_(Lock)
+static VOID
+RemoveNode(_Inout_ ALLOWEDIPS_NODE *Node, _In_ EX_PUSH_LOCK *Lock)
+{
+    ALLOWEDIPS_NODE *Child, **ParentBit, *Parent;
+    BOOLEAN FreeParent;
+
+    RemoveEntryList(&Node->PeerList);
+    InitializeListHead(&Node->PeerList);
+    RcuInitPointer(Node->Peer, NULL);
+    if (Node->Bit[0] && Node->Bit[1])
+        return;
+    Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Node->Bit[!RcuAccessPointer(Node->Bit[0])], Lock);
+    if (Child)
+        Child->ParentBitPacked = Node->ParentBitPacked;
+    ParentBit = (ALLOWEDIPS_NODE **)(Node->ParentBitPacked & ~(ULONG_PTR)3);
+    *ParentBit = Child;
+    Parent =
+        (ALLOWEDIPS_NODE *)((UCHAR *)ParentBit - FIELD_OFFSET(ALLOWEDIPS_NODE, Bit[Node->ParentBitPacked & 1]));
+    FreeParent = !RcuAccessPointer(Node->Bit[0]) && !RcuAccessPointer(Node->Bit[1]) &&
+                 (Node->ParentBitPacked & 3) <= 1 && !RcuAccessPointer(Parent->Peer);
+    if (FreeParent)
+        Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Parent->Bit[!(Node->ParentBitPacked & 1)], Lock);
+    RcuCall(&Node->Rcu, NodeFreeRcu);
+    if (!FreeParent)
+        return;
+    if (Child)
+        Child->ParentBitPacked = Parent->ParentBitPacked;
+    *(ALLOWEDIPS_NODE **)(Parent->ParentBitPacked & ~(ULONG_PTR)3) = Child;
+    RcuCall(&Parent->Rcu, NodeFreeRcu);
+}
+
+_Requires_lock_held_(Lock)
+static NTSTATUS
+Remove(_Inout_ ALLOWEDIPS_NODE __rcu **Trie,
+       _In_ UINT8 Bits,
+       _In_ CONST UINT8 *Key,
+       _In_ UINT8 Cidr,
+       _In_ WG_PEER *Peer,
+       _In_ EX_PUSH_LOCK *Lock)
+{
+    ALLOWEDIPS_NODE *Node;
+
+    if (Cidr > Bits)
+        return STATUS_INVALID_PARAMETER;
+    if (!RcuAccessPointer(*Trie) || !NodePlacement(*Trie, Key, Cidr, Bits, &Node, Lock) ||
+        Peer != RcuAccessPointer(Node->Peer))
+        return STATUS_SUCCESS;
+
+    RemoveNode(Node, Lock);
+    return STATUS_SUCCESS;
+}
+
 _Use_decl_annotations_
 VOID
 AllowedIpsInit(ALLOWEDIPS_TABLE *Table)
@@ -359,41 +412,40 @@ AllowedIpsInsertV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_P
 }
 
 _Use_decl_annotations_
+NTSTATUS
+AllowedIpsRemoveV4(ALLOWEDIPS_TABLE *Table, CONST IN_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
+{
+    /* Aligned so it can be passed to FindLastSet */
+    __declspec(align(4)) UINT8 Key[4];
+
+    ++Table->Seq;
+    SwapEndian(Key, (CONST UINT8 *)Ip, 32);
+    return Remove(&Table->Root4, 32, Key, Cidr, Peer, Lock);
+}
+
+_Use_decl_annotations_
+NTSTATUS
+AllowedIpsRemoveV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
+{
+    /* Aligned so it can be passed to FindLastSet64 */
+    __declspec(align(8)) UINT8 Key[16];
+
+    ++Table->Seq;
+    SwapEndian(Key, (CONST UINT8 *)Ip, 128);
+    return Remove(&Table->Root6, 128, Key, Cidr, Peer, Lock);
+}
+
+_Use_decl_annotations_
 VOID
 AllowedIpsRemoveByPeer(ALLOWEDIPS_TABLE *Table, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
 {
-    ALLOWEDIPS_NODE *Node, *Child, **ParentBit, *Parent, *Tmp;
-    BOOLEAN FreeParent;
+    ALLOWEDIPS_NODE *Node, *Tmp;
 
     if (IsListEmpty(&Peer->AllowedIpsList))
         return;
     ++Table->Seq;
     LIST_FOR_EACH_ENTRY_SAFE (Node, Tmp, &Peer->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
-    {
-        RemoveEntryList(&Node->PeerList);
-        InitializeListHead(&Node->PeerList);
-        RcuInitPointer(Node->Peer, NULL);
-        if (Node->Bit[0] && Node->Bit[1])
-            continue;
-        Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Node->Bit[!RcuAccessPointer(Node->Bit[0])], Lock);
-        if (Child)
-            Child->ParentBitPacked = Node->ParentBitPacked;
-        ParentBit = (ALLOWEDIPS_NODE **)(Node->ParentBitPacked & ~(ULONG_PTR)3);
-        *ParentBit = Child;
-        Parent =
-            (ALLOWEDIPS_NODE *)((UCHAR *)ParentBit - FIELD_OFFSET(ALLOWEDIPS_NODE, Bit[Node->ParentBitPacked & 1]));
-        FreeParent = !RcuAccessPointer(Node->Bit[0]) && !RcuAccessPointer(Node->Bit[1]) &&
-                     (Node->ParentBitPacked & 3) <= 1 && !RcuAccessPointer(Parent->Peer);
-        if (FreeParent)
-            Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Parent->Bit[!(Node->ParentBitPacked & 1)], Lock);
-        RcuCall(&Node->Rcu, NodeFreeRcu);
-        if (!FreeParent)
-            continue;
-        if (Child)
-            Child->ParentBitPacked = Parent->ParentBitPacked;
-        *(ALLOWEDIPS_NODE **)(Parent->ParentBitPacked & ~(ULONG_PTR)3) = Child;
-        RcuCall(&Parent->Rcu, NodeFreeRcu);
-    }
+        RemoveNode(Node, Lock);
 }
 
 _Use_decl_annotations_

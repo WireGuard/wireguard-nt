@@ -209,6 +209,12 @@ BOOL(WINAPI WIREGUARD_GET_ADAPTER_STATE_FUNC)
 
 #define WIREGUARD_KEY_LENGTH 32
 
+typedef enum
+{
+    WIREGUARD_ALLOWED_IP_REMOVE = 1 << 0 /**< Remove the specified allowed IP instead of adding it to the peer. */
+} WIREGUARD_ALLOWED_IP_FLAG;
+DEFINE_ENUM_FLAG_OPERATORS(WIREGUARD_ALLOWED_IP_FLAG)
+
 typedef struct _WIREGUARD_ALLOWED_IP WIREGUARD_ALLOWED_IP;
 struct ALIGNED(8) _WIREGUARD_ALLOWED_IP
 {
@@ -216,9 +222,10 @@ struct ALIGNED(8) _WIREGUARD_ALLOWED_IP
     {
         IN_ADDR V4;
         IN6_ADDR V6;
-    } Address;                    /**< IP address */
-    ADDRESS_FAMILY AddressFamily; /**< Address family, either AF_INET or AF_INET6 */
-    BYTE Cidr;                    /**< CIDR of allowed IPs */
+    } Address;                       /**< IP address */
+    ADDRESS_FAMILY AddressFamily;    /**< Address family, either AF_INET or AF_INET6 */
+    BYTE Cidr;                       /**< CIDR of allowed IPs */
+    WIREGUARD_ALLOWED_IP_FLAG Flags; /**< Bitwise combination of flags */
 };
 
 typedef enum

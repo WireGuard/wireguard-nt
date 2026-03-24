@@ -256,6 +256,7 @@ Typedef'd as `WIREGUARD_GET_ADAPTER_STATE`.  Gets whether the specified adapter 
 
 |Type|Name|Description|
 |--|--|--|
+|`WIREGUARD_ALLOWED_IP_FLAG`|Flags|Bitwise combination of flags.|
 |Union|Address|IP address; the `V4` member is a `IN_ADDR` and the `V6` member is a `IN6_ADDR`.|
 |`ADDRESS_FAMILY`|AddressFamily|Address family, either `AF_INET` or `AF_INET6`.|
 |`BYTE`|Cidr|The CIDR of the address range.|
@@ -288,6 +289,15 @@ These values may be or'd together.
 |`WIREGUARD_PEER_REPLACE_ALLOWED_IPS`|Remove all allowed IPs before adding new ones (unused on get).|
 |`WIREGUARD_PEER_REMOVE`|Remove specified peer (unused on get).|
 |`WIREGUARD_PEER_UPDATE_ONLY`|Do not add a new peer (unused on get).|
+
+### Enumeration: `WIREGUARD_ALLOWED_IP_FLAG` - bitwise flags for allowed IPs.
+
+These values may be or'd together.
+
+|Name|Description|
+|--|--|
+|`WIREGUARD_ALLOWED_IP_REMOVE`|Remove the specified allowed IP instead of adding it to the peer.|
+
 
 ### Function: `WireGuardSetConfiguration` - sets configuration of adapter.
 

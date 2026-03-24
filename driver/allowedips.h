@@ -63,6 +63,24 @@ AllowedIpsInsertV6(
     _In_ EX_PUSH_LOCK *Lock);
 
 _Requires_lock_held_(Lock)
+NTSTATUS
+AllowedIpsRemoveV4(
+    _Inout_ ALLOWEDIPS_TABLE *Table,
+    _In_ CONST IN_ADDR *Ip,
+    _In_ UINT8 Cidr,
+    _In_ WG_PEER *Peer,
+    _In_ EX_PUSH_LOCK *Lock);
+
+_Requires_lock_held_(Lock)
+NTSTATUS
+AllowedIpsRemoveV6(
+    _Inout_ ALLOWEDIPS_TABLE *Table,
+    _In_ CONST IN6_ADDR *Ip,
+    _In_ UINT8 Cidr,
+    _In_ WG_PEER *Peer,
+    _In_ EX_PUSH_LOCK *Lock);
+
+_Requires_lock_held_(Lock)
 VOID
 AllowedIpsRemoveByPeer(_Inout_ ALLOWEDIPS_TABLE *Table, _In_ WG_PEER *Peer, _In_ EX_PUSH_LOCK *Lock);
 
