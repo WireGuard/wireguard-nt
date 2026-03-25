@@ -114,6 +114,7 @@ __RcuCall(_Inout_ RCU_CALLBACK *Head)
     KeAcquireInStackQueuedSpinLock(&Cleanup.Lock, &LockHandle);
     *(Cleanup.Tail ? &Cleanup.Tail->Next : &Cleanup.Head) = Head;
     Cleanup.Tail = Head;
+#pragma prefast(suppress : cpp/drivers/irql-too-high) /* The last param is FALSE, so the max level is 2, not 1. */
     KeSetEvent(&Cleanup.WorkPending, IO_NO_INCREMENT, FALSE);
     KeReleaseInStackQueuedSpinLock(&LockHandle);
 }

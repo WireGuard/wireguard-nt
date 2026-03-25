@@ -173,6 +173,9 @@ CalculateNblPadding(_In_ CONST NET_BUFFER *Nb, _In_ UINT32 Mtu)
     return PaddedSize - LastUnit;
 }
 
+#pragma prefast(push)
+#pragma prefast(disable : cpp/drivers/opaque-mdl-write) /* We're intentionally twiddling with MDLs. */
+#pragma prefast(disable : cpp/drivers/opaque-mdl-use) /* We're intentionally twiddling with MDLs. */
 _IRQL_requires_max_(DISPATCH_LEVEL)
 _Must_inspect_result_
 static BOOLEAN
@@ -211,7 +214,7 @@ EncryptPacket(
         static CONST UCHAR Padding[MESSAGE_PADDING_MULTIPLE - 1] = { 0 };
         PaddingMdl.MappedSystemVa = (PVOID)Padding;
         PaddingMdl.ByteCount = PaddingLen;
-#pragma warning(suppress : 28145) /*  We're modifying MdlFlags manually, but that's the whole point of this hack */
+#pragma warning(suppress : 28145) /* We're intentionally twiddling with MDLs. */
         PaddingMdl.MdlFlags = MDL_MAPPED_TO_SYSTEM_VA | MDL_SOURCE_IS_NONPAGED_POOL;
         LastMdl->Next = &PaddingMdl;
         LastMdl->ByteCount = NeededLen;
@@ -238,6 +241,7 @@ EncryptPacket(
     }
     return Ret;
 }
+#pragma prefast(pop)
 
 _Use_decl_annotations_
 VOID

@@ -611,6 +611,8 @@ ReadLogLine(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         Irp->IoStatus.Information = sizeof(WG_IOCTL_LOG_ENTRY);
 }
 
+#pragma prefast(push)
+#pragma prefast(disable : cpp/drivers/invalid-function-class-typedef) /* It's fine to make this paged because it's only ever called from userspace. */
 _Dispatch_type_(IRP_MJ_DEVICE_CONTROL)
 static DRIVER_DISPATCH_PAGED DispatchDeviceControl;
 _Use_decl_annotations_
@@ -639,6 +641,7 @@ DispatchDeviceControl(DEVICE_OBJECT *DeviceObject, IRP *Irp)
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
     return Status;
 }
+#pragma prefast(pop)
 
 _Dispatch_type_(IRP_MJ_CREATE)
 static DRIVER_DISPATCH DispatchCreate;
@@ -679,6 +682,8 @@ ndisDispatch:
 #ifdef ALLOC_PRAGMA
 #    pragma alloc_text(INIT, IoctlDriverEntry)
 #endif
+#pragma prefast(push)
+#pragma prefast(disable : cpp/drivers/illegal-field-access-2) /* This is a driver entry routine; we've just split them up. */
 _Use_decl_annotations_
 VOID
 IoctlDriverEntry(DRIVER_OBJECT *DriverObject)
@@ -690,3 +695,4 @@ IoctlDriverEntry(DRIVER_OBJECT *DriverObject)
     DriverObject->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
     DriverObject->MajorFunction[IRP_MJ_PNP] = DispatchPnp;
 }
+#pragma prefast(pop)
