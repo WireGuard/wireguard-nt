@@ -675,6 +675,7 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
     IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
     IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     static CONST WSK_CLIENT_DATAGRAM_DISPATCH WskClientDatagramDispatch = { .WskReceiveFromEvent = Receive };
+#pragma warning(suppress : 6014) /* The IRP is stack-allocated, not leaked. */
     Status = WskProviderNpi.Dispatch->WskSocket(
         WskProviderNpi.Client,
         Sa->sa_family,
