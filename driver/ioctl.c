@@ -641,7 +641,7 @@ DispatchDeviceControl(DEVICE_OBJECT *DeviceObject, IRP *Irp)
 }
 
 _Dispatch_type_(IRP_MJ_CREATE)
-static DRIVER_DISPATCH_PAGED DispatchCreate;
+static DRIVER_DISPATCH DispatchCreate;
 _Use_decl_annotations_
 static NTSTATUS
 DispatchCreate(DEVICE_OBJECT *DeviceObject, IRP *Irp)
@@ -657,7 +657,7 @@ DispatchCreate(DEVICE_OBJECT *DeviceObject, IRP *Irp)
 }
 
 _Dispatch_type_(IRP_MJ_PNP)
-static DRIVER_DISPATCH_PAGED DispatchPnp;
+static DRIVER_DISPATCH DispatchPnp;
 _Use_decl_annotations_
 static NTSTATUS
 DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
