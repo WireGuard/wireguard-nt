@@ -118,15 +118,6 @@ CryptoIsZero32(_In_reads_bytes_(32) CONST VOID *Data)
 static inline VOID
 CryptoRandom(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len)
 {
-#ifdef SDV_HACKS
-    /* SDV refuses to run if we link against cng.lib, so for SDV mode, we just insert a stub
-     * function instead. Then, out of an abundance of caution, we make sure that this always
-     * bug checks in case somebody's build system somehow winds up building this by accident.
-     */
-    if (Len)
-        KeBugCheck(CRYPTO_LIBRARY_INTERNAL_ERROR);
-    RtlFillMemory(RandomData, Len, 'A');
-#else
     /* CryptoRandom is documented as "Always returns TRUE." We see from reverse engineering that
      * it returns FALSE if AesRNGState_generate fails, and that fails if a size addition overflows,
      * which presumably it won't given that we only ever pass small values of Len. So just assert
@@ -134,7 +125,6 @@ CryptoRandom(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len)
      */
     if (!SystemPrng(RandomData, Len))
         KeBugCheck(CRYPTO_LIBRARY_INTERNAL_ERROR);
-#endif
 }
 
 enum CHACHA20POLY1305_LENGTHS

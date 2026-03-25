@@ -9,7 +9,6 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
-    <ForcedTargetVersion Condition="'$(SDVHacks)'=='true'">Windows10</ForcedTargetVersion>
   </PropertyGroup>
   <Import Project="..\wireguard-nt.props" />
   <PropertyGroup>
@@ -18,13 +17,11 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>NDIS_MINIPORT_DRIVER=1;NDIS650_MINIPORT=1;NDIS689_MINIPORT=1;NDIS_WDM=1;POOL_ZERO_DOWN_LEVEL_SUPPORT;POOL_NX_OPTIN=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(SDVHacks)'=='true'">SDV_HACKS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <DisableSpecificWarnings>4100;4200;4201;$(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ndis.lib;netio.lib;ntstrsafe.lib;uuid.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(SDVHacks)'!='true'">cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ndis.lib;netio.lib;ntstrsafe.lib;uuid.lib;wdmsec.lib;cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
