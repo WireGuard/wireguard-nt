@@ -10,7 +10,6 @@ static CONST ULONG PacketCacheSizes[] = { 192, 512, 1024, 1500, 9000 };
 static NDIS_HANDLE LooseNbPool, LooseNblPool;
 static NDIS_HANDLE NbDataPools[ARRAYSIZE(PacketCacheSizes)], NblDataPools[ARRAYSIZE(PacketCacheSizes)];
 
-#pragma warning(suppress : 28195) /* IoAllocateMdl allocates, even if missing the SAL annotation. */
 _Use_decl_annotations_
 MDL *
 MemAllocateDataAndMdlChain(ULONG BufferSize)
@@ -29,7 +28,6 @@ MemAllocateDataAndMdlChain(ULONG BufferSize)
     return Mdl;
 }
 
-#pragma warning(suppress : 6014) /* IoFreeMdl frees, even if missing the SAL annotation. */
 _Use_decl_annotations_
 VOID
 MemFreeDataAndMdlChain(MDL *Mdl)
@@ -66,7 +64,6 @@ MemAllocateNetBufferList(ULONG SpaceBefore, ULONG Size, ULONG SpaceAfter)
         }
     }
 
-#pragma warning(suppress : 6014) /* MDL is aliased in Nbl or freed on failure. */
     MDL *Mdl = MemAllocateDataAndMdlChain(Sum);
     if (!Mdl)
         return NULL;
@@ -104,7 +101,6 @@ MemFreeNetBufferList(NET_BUFFER_LIST *Nbl)
     NdisFreeNetBufferList(Nbl);
 }
 
-#pragma warning(suppress : 28195) /* NdisAllocateNetBufferList & co allocate. */
 _Use_decl_annotations_
 NET_BUFFER_LIST *
 MemAllocateNetBufferListWithClonedGeometry(NET_BUFFER_LIST *Original, ULONG AdditionalBytesPerNb)
@@ -145,11 +141,9 @@ MemAllocateNetBufferListWithClonedGeometry(NET_BUFFER_LIST *Original, ULONG Addi
                 goto linkNb;
             }
         }
-#pragma warning(suppress : 6014) /* `CloneMdl` is aliased in NdisAllocateNetBuffer or freed on failure. */
         MDL *CloneMdl = MemAllocateDataAndMdlChain(Length);
         if (!CloneMdl)
             goto cleanupClone;
-#pragma warning(suppress : 6014) /* `*CloneNb` is aliased in Clone or freed on failure. */
         *CloneNb = NdisAllocateNetBuffer(LooseNbPool, CloneMdl, 0, 0);
         if (!*CloneNb)
         {

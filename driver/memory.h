@@ -12,11 +12,6 @@
 
 #define MEMORY_TAG Be32ToCpu('wgnt')
 
-/* Source analysis has issues with ExAllocatePool... annotations raising false alerts. */
-#pragma warning(push)
-#pragma warning(disable : 28118)
-#pragma warning(disable : 28160)
-
 _IRQL_requires_max_(DISPATCH_LEVEL)
 _Post_maybenull_
 _Must_inspect_result_
@@ -76,8 +71,6 @@ MemAllocateArrayAndZero(_In_ SIZE_T NumberOfElements, _In_ SIZE_T SizeOfOneEleme
         return NULL;
     return ExAllocatePoolZero(NonPagedPool, Size, MEMORY_TAG);
 }
-
-#pragma warning(pop)
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static inline VOID

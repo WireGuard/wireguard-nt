@@ -25,11 +25,6 @@ ProcessorTick(KDPC *Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID Sys
         KeSetEvent(Event, IO_NO_INCREMENT, FALSE);
 }
 
-/* `Refs`, although on stack, is shared between processors, and does require interlocked access. */
-#pragma warning(push)
-#pragma warning(disable : 28112)
-#pragma warning(disable : 28113)
-
 _Use_decl_annotations_
 VOID RcuSynchronize(VOID)
 {
@@ -55,8 +50,6 @@ VOID RcuSynchronize(VOID)
 out:
     MuReleasePushLockExclusive(&SyncState.Lock);
 }
-
-#pragma warning(pop)
 
 static struct
 {

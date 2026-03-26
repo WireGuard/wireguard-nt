@@ -42,8 +42,6 @@ static_assert(
 
 #undef SIZE_OF_EMBEDDED
 
-#pragma warning(disable : 28175) /* undocumented: the member of struct should not be accessed by a driver */
-
 static DRIVER_DISPATCH *NdisDispatchDeviceControl, *NdisDispatchCreate, *NdisDispatchPnp;
 /* The following binary blob security descriptor was generated via:
  *    PSECURITY_DESCRIPTOR Sd;

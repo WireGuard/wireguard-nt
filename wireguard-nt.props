@@ -83,12 +83,6 @@
     <OutDir Condition="'$(ConfigurationType)'=='Driver'">$(IntDir)</OutDir>
     <PackageDir>..\$(Configuration)\$(WireGuardPlatform)\$(ProjectName)\</PackageDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(RunCodeAnalysis)'=='true'">
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <ClCompile>
-      <EnablePREfast>true</EnablePREfast>
-    </ClCompile>
-  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>WIREGUARD_VERSION_MAJ=$(WireGuardVersionMaj);WIREGUARD_VERSION_MIN=$(WireGuardVersionMin);WIREGUARD_VERSION_REL=$(WireGuardVersionRel);WIREGUARD_VERSION="$(WireGuardVersion)";%(PreprocessorDefinitions)</PreprocessorDefinitions>

@@ -17,9 +17,6 @@
 #    include <devioctl.h>
 #endif
 
-#pragma warning(push)
-#pragma warning(disable : 4324) /* structure was padded due to alignment specifier */
-
 #define WG_KEY_LEN 32
 
 typedef enum
@@ -126,5 +123,3 @@ VOID
 IoctlDriverEntry(_In_ DRIVER_OBJECT *DriverObject);
 
 #endif
-
-#pragma warning(pop)

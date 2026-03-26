@@ -203,9 +203,6 @@ retryWhileHoldingSharedLock:
     return STATUS_SUCCESS;
 }
 
-#pragma warning(suppress : 28194) /* `Nbl` is aliased in Ctx->Nbl or freed on failure. */
-#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpoint failure, or \
-                                     restored by ExReleaseSpinLockShared */
 _Use_decl_annotations_
 NTSTATUS
 SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepalive)
@@ -288,8 +285,6 @@ cleanupNbls:
     return Status;
 }
 
-#pragma warning(suppress : 28167) /* IRQL is either not raised on SocketResolvePeerEndpoint failure, or \
-                                     restored by ExReleaseSpinLockShared */
 _Use_decl_annotations_
 NTSTATUS
 SocketSendBufferToPeer(WG_PEER *Peer, CONST VOID *Buffer, ULONG Len)
@@ -675,7 +670,6 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
     IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
     IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     static CONST WSK_CLIENT_DATAGRAM_DISPATCH WskClientDatagramDispatch = { .WskReceiveFromEvent = Receive };
-#pragma warning(suppress : 6014) /* The IRP is stack-allocated, not leaked. */
     Status = WskProviderNpi.Dispatch->WskSocket(
         WskProviderNpi.Client,
         Sa->sa_family,

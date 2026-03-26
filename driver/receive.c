@@ -464,8 +464,6 @@ PacketDecryptWorker(MULTICORE_WORKQUEUE *WorkQueue)
     ProcessPerPeerWork(&Wg->RxQueue);
 }
 
-#pragma warning(suppress : 28194) /* `Nbl` is aliased in QueueEnqueuePerDeviceAndPeer, or QueueEnqueuePerPeer or freed \
-                                     in FreeReceiveNetBufferList. */
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static VOID
 PacketConsumeData(_Inout_ WG_DEVICE *Wg, _Inout_ __drv_aliasesMem NET_BUFFER_LIST *First)
@@ -559,8 +557,6 @@ PrepareNetBufferListHeader(_Inout_ NET_BUFFER_LIST *Nbl)
     return TRUE;
 }
 
-#pragma warning(suppress : 28194) /* `Nbl` is aliased in NetBufferListInterlockedEnqueue, or PacketConsumeData, \
-                                     or freed in FreeReceiveNetBufferList. */
 _Use_decl_annotations_
 VOID
 PacketReceive(WG_DEVICE *Wg, NET_BUFFER_LIST *First)

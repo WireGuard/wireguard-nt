@@ -10,11 +10,6 @@
 #pragma warning(disable : 4244)  /* '=': conversion from 'UINT32' to 'UINT8', possible loss of data */
 #pragma warning(disable : 4267)  /* '=': conversion from 'SIZE_T' to 'ULONG', possible loss of data */
 #pragma warning(disable : 4242)  /* '=': conversion from 'SIZE_T' to 'UINT32', possible loss of data */
-#pragma warning(disable : 6385)  /* Reading invalid data from '<COMPLEX_EXPR>':  the readable size is '_Old_5`32' \
-                                    bytes, but '56' bytes may be read. */
-#pragma warning(disable : 26451) /* Arithmetic overflow: Using operator '*' on a 4 byte value and then casting the \
-                                    result to a 8 byte value. Cast the value to the wider type before calling operator \
-                                    '*' to avoid overflow (io.2). */
 
 #ifdef ALLOC_PRAGMA
 #    pragma alloc_text(INIT, CryptoDriverEntry)

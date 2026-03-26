@@ -114,7 +114,6 @@ CryptoIsZero32(_In_reads_bytes_(32) CONST VOID *Data)
     return !NotZero;
 }
 
-#pragma warning(disable : 28159) /* We're bug checking in case somebody's RNG is borked. */
 static inline VOID
 CryptoRandom(_Out_writes_bytes_all_(Len) PVOID RandomData, _In_ SIZE_T Len)
 {

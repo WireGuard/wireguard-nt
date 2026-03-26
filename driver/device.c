@@ -17,8 +17,6 @@
 #include <ntstrsafe.h>
 #include <netioapi.h>
 
-#pragma warning(disable : 28175) /* undocumented: the member of struct should not be accessed by a driver */
-
 #define NDIS_MINIPORT_VERSION_MIN ((NDIS_MINIPORT_MINIMUM_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINIMUM_MINOR_VERSION)
 #define NDIS_MINIPORT_VERSION_MAX ((NDIS_MINIPORT_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINOR_VERSION)
 
@@ -404,7 +402,6 @@ HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
     MemFree(Wg);
 }
 
-#pragma warning(suppress : 28194) /* `Wg` is aliased in NdisMSetMiniportAttributes. */
 _IRQL_requires_max_(PASSIVE_LEVEL)
 static NDIS_STATUS
 RegisterAdapter(_In_ NDIS_HANDLE MiniportAdapterHandle, _In_ __drv_aliasesMem WG_DEVICE *Wg)

@@ -214,7 +214,6 @@ EncryptPacket(
         static CONST UCHAR Padding[MESSAGE_PADDING_MULTIPLE - 1] = { 0 };
         PaddingMdl.MappedSystemVa = (PVOID)Padding;
         PaddingMdl.ByteCount = PaddingLen;
-#pragma warning(suppress : 28145) /* We're intentionally twiddling with MDLs. */
         PaddingMdl.MdlFlags = MDL_MAPPED_TO_SYSTEM_VA | MDL_SOURCE_IS_NONPAGED_POOL;
         LastMdl->Next = &PaddingMdl;
         LastMdl->ByteCount = NeededLen;
@@ -495,8 +494,6 @@ outNokey:
     PacketSendQueuedHandshakeInitiation(Peer, FALSE);
 }
 
-#pragma warning( \
-    suppress : 6014) /* `Nbl` is returned in NdisMSendNetBufferListsComplete or freed in MemFreeNetBufferList. */
 _Use_decl_annotations_
 VOID
 FreeSendNetBufferList(WG_DEVICE *Wg, NET_BUFFER_LIST *FirstNbl, ULONG SendCompleteFlags)

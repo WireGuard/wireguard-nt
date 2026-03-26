@@ -71,7 +71,6 @@ NodeFreeRcu(RCU_CALLBACK *Rcu)
 }
 
 static RCU_CALLBACK_FN RootFreeRcu;
-#pragma warning(suppress : 6262) /* Using 1044 bytes of stack is still below 1280. */
 _Use_decl_annotations_
 static VOID
 RootFreeRcu(RCU_CALLBACK *Rcu)
@@ -87,7 +86,6 @@ RootFreeRcu(RCU_CALLBACK *Rcu)
     }
 }
 
-#pragma warning(suppress : 6262) /* Using 1044 bytes of stack is still below 1280. */
 static VOID
 RootRemovePeerLists(_In_ ALLOWEDIPS_NODE *Root)
 {
