@@ -371,6 +371,7 @@ static VOID
 HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
 {
     WG_DEVICE *Wg = (WG_DEVICE *)MiniportAdapterContext;
+    IoctlHalt(Wg);
     MuAcquirePushLockExclusive(&DeviceListLock);
     RemoveEntryList(&Wg->DeviceList);
     MuReleasePushLockExclusive(&DeviceListLock);
@@ -526,6 +527,8 @@ RegisterAdapter(_In_ NDIS_HANDLE MiniportAdapterHandle, _In_ __drv_aliasesMem WG
     return NDIS_STATUS_SUCCESS;
 }
 
+#pragma prefast(push)
+#pragma prefast(disable : cpp/drivers/illegal-field-access-2) /* We make use of DeviceObject->Reserved. */
 static MINIPORT_INITIALIZE InitializeEx;
 _Use_decl_annotations_
 static NDIS_STATUS
@@ -542,6 +545,18 @@ InitializeEx(
     Wg->InterfaceIndex = MiniportInitParameters->IfIndex;
     Wg->InterfaceLuid = MiniportInitParameters->NetLuid;
     LogRingInit(&Wg->Log);
+
+    NdisMGetDeviceProperty(MiniportAdapterHandle, NULL, &Wg->FunctionalDeviceObject, NULL, NULL, NULL);
+    if (!Wg->FunctionalDeviceObject)
+    {
+        Status = STATUS_INVALID_PARAMETER;
+        goto cleanupWg;
+    }
+    NT_ASSERT(!Wg->FunctionalDeviceObject->Reserved);
+    /* Reverse engineering indicates that we'd be better off calling NdisWdfGetAdapterContextFromAdapterHandle(functional_device),
+     * which points to our WG_DEVICE object directly, but this doesn't behave correctly in Windows 10 RTM, so for now we just
+     * stick it into this reserved field. Revisit this when we drop support for old Windows versions. */
+    Wg->FunctionalDeviceObject->Reserved = Wg;
 
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
     ExRundownCompleted(&Wg->ItemsInFlight); /* Wait until Restart is called to mark this active. */
@@ -645,6 +660,7 @@ cleanupWg:
     NdisWriteErrorLogEntry(MiniportAdapterHandle, NDIS_ERROR_CODE_DRIVER_FAILURE, 1, Status);
     return NDIS_STATUS_FAILURE;
 }
+#pragma prefast(pop)
 
 static MINIPORT_DEVICE_PNP_EVENT_NOTIFY DevicePnPEventNotify;
 _Use_decl_annotations_
