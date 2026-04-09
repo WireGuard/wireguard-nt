@@ -92,4 +92,7 @@
   <Target Name="CleanNci">
     <Delete Files="$(IntDir)nci.obj;$(IntDir)nci.lib" />
   </Target>
+  <Target Name="ProductionSign" Condition="'$(SignMode)'=='ProductionSign' And '$(SignStage)'=='SignDriver' And Exists('$(TargetPath)')">
+    <Exec Command="&quot;$(DriverSignToolPath)signtool.exe&quot; sign /fd sha256 /sha1 $(ProductionCertificate) /tr &quot;$(TimestampServer)&quot; /td sha256 &quot;$(TargetPath)&quot;" />
+  </Target>
 </Project>
