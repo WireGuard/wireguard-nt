@@ -375,7 +375,7 @@ SetPeer(_Inout_ WG_DEVICE *Wg, _Inout_ CONST volatile WG_IOCTL_PEER **UnsafeIoct
         else if (IoctlAllowedIp.AddressFamily == AF_INET6 && IoctlAllowedIp.Cidr <= 128)
         {
             if (IoctlAllowedIp.Flags & WG_IOCTL_ALLOWED_IP_REMOVE)
-                 Status = AllowedIpsRemoveV6(
+                Status = AllowedIpsRemoveV6(
                     &Peer->Device->PeerAllowedIps,
                     &IoctlAllowedIp.Address.V6,
                     IoctlAllowedIp.Cidr,
