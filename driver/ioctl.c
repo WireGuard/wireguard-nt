@@ -12,10 +12,6 @@
 #include "logging.h"
 #include <ntddk.h>
 
-#pragma prefast(push)
-/* We override in a split driver entry function, and make use of DeviceObject->Reserved. */
-#pragma prefast(disable : cpp/drivers/illegal-field-access-2)
-
 #define SIZE_OF_EMBEDDED(A, B) \
     FIELD_OFFSET( \
         struct { \
@@ -86,6 +82,14 @@ HasAccess(_In_ ACCESS_MASK DesiredAccess, _In_ KPROCESSOR_MODE AccessMode, _Out_
     return HasAccess;
 }
 
+static WG_DEVICE *
+WgDeviceFromFdo(_In_ DEVICE_OBJECT *DeviceObject)
+{
+    if (DeviceObject->DeviceType != FILE_DEVICE_PHYSICAL_NETCARD || !DeviceObject->DeviceExtension)
+        return NULL;
+    return NdisWdfGetAdapterContextFromAdapterHandle(DeviceObject->DeviceExtension);
+}
+
 _IRQL_requires_max_(PASSIVE_LEVEL)
 static VOID
 Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
@@ -105,7 +109,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         }
     }
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -485,7 +489,7 @@ Set(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         return;
     }
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -556,7 +560,7 @@ AdapterState(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     WG_IOCTL_ADAPTER_STATE Op;
     RtlCopyMemory(&Op, Irp->AssociatedIrp.SystemBuffer, sizeof(Op));
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -595,7 +599,7 @@ ReadLogLine(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
     if (!HasAccess(FILE_READ_DATA, Irp->RequestorMode, &Irp->IoStatus.Status))
         return;
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg || ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -651,7 +655,7 @@ _Use_decl_annotations_
 static NTSTATUS
 DispatchCreate(DEVICE_OBJECT *DeviceObject, IRP *Irp)
 {
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (Wg && ReadBooleanNoFence(&Wg->IsDeviceRemoving))
     {
         Irp->IoStatus.Status = NDIS_STATUS_ADAPTER_REMOVED;
@@ -671,7 +675,7 @@ DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
     if (Stack->MinorFunction != IRP_MN_QUERY_REMOVE_DEVICE && Stack->MinorFunction != IRP_MN_SURPRISE_REMOVAL)
         goto ndisDispatch;
 
-    WG_DEVICE *Wg = DeviceObject->Reserved;
+    WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg)
         goto ndisDispatch;
     WriteBooleanNoFence(&Wg->IsDeviceRemoving, TRUE);
@@ -684,6 +688,8 @@ ndisDispatch:
 #ifdef ALLOC_PRAGMA
 #    pragma alloc_text(INIT, IoctlDriverEntry)
 #endif
+#pragma prefast(push)
+#pragma prefast(disable : cpp/drivers/illegal-field-access-2) /* This is a driver entry routine; we've just split them up. */
 _Use_decl_annotations_
 VOID
 IoctlDriverEntry(DRIVER_OBJECT *DriverObject)
