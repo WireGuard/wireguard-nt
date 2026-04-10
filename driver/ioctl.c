@@ -681,13 +681,6 @@ ndisDispatch:
     return NdisDispatchPnp(DeviceObject, Irp);
 }
 
-_Use_decl_annotations_
-VOID
-IoctlHalt(WG_DEVICE *Wg)
-{
-    WritePointerNoFence(&Wg->FunctionalDeviceObject->Reserved, NULL);
-}
-
 #ifdef ALLOC_PRAGMA
 #    pragma alloc_text(INIT, IoctlDriverEntry)
 #endif

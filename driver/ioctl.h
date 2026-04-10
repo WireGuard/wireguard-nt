@@ -119,11 +119,6 @@ typedef __declspec(align(8)) struct _WG_IOCTL_LOG_ENTRY
 typedef struct _WG_DEVICE WG_DEVICE;
 
 _IRQL_requires_max_(APC_LEVEL)
-_Requires_lock_not_held_(_Global_critical_region_)
-VOID
-IoctlHalt(_Inout_ WG_DEVICE *Wg);
-
-_IRQL_requires_max_(APC_LEVEL)
 VOID
 IoctlDriverEntry(_In_ DRIVER_OBJECT *DriverObject);
 

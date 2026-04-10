@@ -371,7 +371,8 @@ static VOID
 HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
 {
     WG_DEVICE *Wg = (WG_DEVICE *)MiniportAdapterContext;
-    IoctlHalt(Wg);
+#pragma prefast(suppress: cpp/drivers/illegal-field-access-2) /* We intentionally clear our reference from ->Reserved. */
+    WritePointerNoFence(&Wg->FunctionalDeviceObject->Reserved, NULL);
     MuAcquirePushLockExclusive(&DeviceListLock);
     RemoveEntryList(&Wg->DeviceList);
     MuReleasePushLockExclusive(&DeviceListLock);
@@ -553,9 +554,6 @@ InitializeEx(
         goto cleanupWg;
     }
     NT_ASSERT(!Wg->FunctionalDeviceObject->Reserved);
-    /* Reverse engineering indicates that we'd be better off calling NdisWdfGetAdapterContextFromAdapterHandle(functional_device),
-     * which points to our WG_DEVICE object directly, but this doesn't behave correctly in Windows 10 RTM, so for now we just
-     * stick it into this reserved field. Revisit this when we drop support for old Windows versions. */
     Wg->FunctionalDeviceObject->Reserved = Wg;
 
     ExInitializeRundownProtection(&Wg->ItemsInFlight);
