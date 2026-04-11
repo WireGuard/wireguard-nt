@@ -289,8 +289,8 @@ SetPeer(_Inout_ WG_DEVICE *Wg, _Inout_ CONST volatile WG_IOCTL_PEER **UnsafeIoct
     if (*RemainingSize < AllowedIPsSize)
         goto cleanupStack;
     *RemainingSize -= AllowedIPsSize;
-    CONST WG_IOCTL_ALLOWED_IP *UnsafeIoctlAllowedIp =
-        (CONST WG_IOCTL_ALLOWED_IP *)((UCHAR *)UnsafeIoctlPeer + sizeof(WG_IOCTL_PEER));
+    CONST volatile WG_IOCTL_ALLOWED_IP *UnsafeIoctlAllowedIp =
+        (CONST volatile WG_IOCTL_ALLOWED_IP *)((UCHAR *)UnsafeIoctlPeer + sizeof(WG_IOCTL_PEER));
     *UnsafeIoctlPeerPtr = (CONST WG_IOCTL_PEER *)((UCHAR *)UnsafeIoctlAllowedIp + AllowedIPsSize);
 
     Status = STATUS_SUCCESS;
