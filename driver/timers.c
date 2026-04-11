@@ -26,8 +26,8 @@ TimerDpcCallback(KDPC *Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID 
 {
     TIMER *Timer = CONTAINING_RECORD(Dpc, TIMER, Dpc);
     _Analysis_assume_(DeferredContext != NULL);
-    ((PTIMER_CALLBACK)DeferredContext)(Timer);
     WriteBooleanNoFence(&Timer->Pending, FALSE);
+    ((PTIMER_CALLBACK)DeferredContext)(Timer);
 }
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
