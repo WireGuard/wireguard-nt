@@ -121,7 +121,7 @@ HlistAddHeadRcu(_Inout_ __drv_aliasesMem HLIST_NODE *Node, _Inout_ HLIST_HEAD *H
 #define HASH_SIZE(Name) (ARRAYSIZE(Name))
 
 static inline VOID
-__HashInit(_Out_writes_bytes_all_(Sz) HLIST_HEAD *Ht, _In_ SIZE_T Sz)
+__HashInit(_Out_writes_all_(Sz) HLIST_HEAD *Ht, _In_ SIZE_T Sz)
 {
     for (SIZE_T i = 0; i < Sz; ++i)
         HlistHeadInit(&Ht[i]);
