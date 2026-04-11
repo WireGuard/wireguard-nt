@@ -128,8 +128,10 @@ retryWhileHoldingSharedLock:
         MIB_IF_ROW2 Interface;
         MIB_IPINTERFACE_ROW IpInterface;
     } *If = MemAllocate(sizeof(*If));
-    if (!If)
+    if (!If) {
+        FreeMibTable(Table);
         return STATUS_INSUFFICIENT_RESOURCES;
+    }
     for (ULONG i = 0; i < Table->NumEntries; ++i)
     {
         if (Table->Table[i].InterfaceLuid.Value == Peer->Device->InterfaceLuid.Value)
