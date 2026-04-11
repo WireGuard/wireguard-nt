@@ -1069,6 +1069,7 @@ ChaCha20Poly1305EncryptMdl(
     UINT8 *SrcBuf;
     MDL *Mdl = Src;
     ULONG Len, LenMdl, OffsetMdl = SrcOffset, Leftover = 0;
+    BOOLEAN Ret = FALSE;
     union
     {
         UINT32 Stream[CHACHA20_BLOCK_WORDS];
@@ -1095,11 +1096,11 @@ ChaCha20Poly1305EncryptMdl(
     for (ULONG Remaining = SrcLen; Remaining; Remaining -= LenMdl)
     {
         if (!Mdl)
-            return FALSE;
+            goto out;
         Len = LenMdl = min(MmGetMdlByteCount(Mdl) - OffsetMdl, Remaining);
         SrcBuf = MmGetSystemAddressForMdlSafe(Mdl, NormalPagePriority | MdlMappingNoExecute | MdlMappingNoWrite);
         if (!SrcBuf)
-            return FALSE;
+            goto out;
         SrcBuf += OffsetMdl;
 
         if (Leftover != 0)
@@ -1140,11 +1141,11 @@ ChaCha20Poly1305EncryptMdl(
     B.Lens[1] = CpuToLe64(SrcLen);
     Poly1305Update(&Poly1305Ctx, (UINT8 *)B.Lens, sizeof(B.Lens));
     Poly1305Final(&Poly1305Ctx, Dst);
-
+    Ret = TRUE;
+out:
     RtlSecureZeroMemory(&ChaCha20Ctx, sizeof(ChaCha20Ctx));
     RtlSecureZeroMemory(&B, sizeof(B));
-
-    return TRUE;
+    return Ret;
 }
 
 _Use_decl_annotations_
