@@ -527,7 +527,7 @@ DriverInstall(HDEVINFO *DevInfoExistingAdaptersForCleanup, SP_DEVINFO_DATA_LIST 
     WCHAR RandomTempSubDirectory[MAX_PATH];
     if (!ResourceCreateTemporaryDirectory(RandomTempSubDirectory))
     {
-        LastError = LOG_LAST_ERROR(L"Failed to create temporary folder %s", RandomTempSubDirectory);
+        LastError = LOG_LAST_ERROR(L"Failed to create temporary folder");
         goto cleanupExistingAdapters;
     }
 
