@@ -47,7 +47,7 @@ NET_BUFFER_LIST *
 MemAllocateNetBufferList(ULONG SpaceBefore, ULONG Size, ULONG SpaceAfter)
 {
     ULONG Sum = Size;
-    if (!NT_SUCCESS(RtlULongAdd(Sum, SpaceBefore, &Sum) || !NT_SUCCESS(RtlULongAdd(Sum, SpaceAfter, &Sum))) ||
+    if (!NT_SUCCESS(RtlULongAdd(Sum, SpaceBefore, &Sum)) || !NT_SUCCESS(RtlULongAdd(Sum, SpaceAfter, &Sum)) ||
         Sum > MTU_MAX)
         return NULL;
     for (ULONG i = 0; i < ARRAYSIZE(PacketCacheSizes); ++i)
