@@ -912,6 +912,12 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
 {
     NTSTATUS Status;
 
+    NdisVersion = NdisGetVersion();
+    if (NdisVersion < NDIS_MINIPORT_VERSION_MIN)
+        return NDIS_STATUS_UNSUPPORTED_REVISION;
+    if (NdisVersion > NDIS_MINIPORT_VERSION_MAX)
+        NdisVersion = NDIS_MINIPORT_VERSION_MAX;
+
     MuInitializePushLock(&DeviceListLock);
     InitializeListHead(&DeviceList);
 
@@ -921,12 +927,6 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     Status = InitIpInterfaceNotifierBugWorkaround();
     if (!NT_SUCCESS(Status))
         goto cleanupIpInterfaceNotifier;
-
-    NdisVersion = NdisGetVersion();
-    if (NdisVersion < NDIS_MINIPORT_VERSION_MIN)
-        return NDIS_STATUS_UNSUPPORTED_REVISION;
-    if (NdisVersion > NDIS_MINIPORT_VERSION_MAX)
-        NdisVersion = NDIS_MINIPORT_VERSION_MAX;
 
     NDIS_MINIPORT_DRIVER_CHARACTERISTICS Miniport = {
         .Header = { .Type = NDIS_OBJECT_TYPE_MINIPORT_DRIVER_CHARACTERISTICS,
