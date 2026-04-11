@@ -540,18 +540,19 @@ PrepareNetBufferListHeader(_Inout_ NET_BUFFER_LIST *Nbl)
     Src += Buffer->Offset;
     MESSAGE_HEADER *Header = MemGetValidatedNetBufferListData(Nbl);
     RtlCopyMemory(Header, Src, sizeof(*Header));
-    ULONG HeaderLen, RequiredLen;
+    ULONG HeaderLen;
+    BOOLEAN LenIsValid;
     if (Header->Type == CpuToLe32(MESSAGE_TYPE_DATA))
-        HeaderLen = sizeof(MESSAGE_DATA), RequiredLen = MESSAGE_MINIMUM_LENGTH;
+        HeaderLen = sizeof(MESSAGE_DATA), LenIsValid = Buffer->Length >= MESSAGE_MINIMUM_LENGTH;
     else if (Header->Type == CpuToLe32(MESSAGE_TYPE_HANDSHAKE_INITIATION))
-        RequiredLen = HeaderLen = sizeof(MESSAGE_HANDSHAKE_INITIATION);
+        HeaderLen = sizeof(MESSAGE_HANDSHAKE_INITIATION), LenIsValid = Buffer->Length == HeaderLen;
     else if (Header->Type == CpuToLe32(MESSAGE_TYPE_HANDSHAKE_RESPONSE))
-        RequiredLen = HeaderLen = sizeof(MESSAGE_HANDSHAKE_RESPONSE);
+        HeaderLen = sizeof(MESSAGE_HANDSHAKE_RESPONSE), LenIsValid = Buffer->Length == HeaderLen;
     else if (Header->Type == CpuToLe32(MESSAGE_TYPE_HANDSHAKE_COOKIE))
-        RequiredLen = HeaderLen = sizeof(MESSAGE_HANDSHAKE_COOKIE);
+        HeaderLen = sizeof(MESSAGE_HANDSHAKE_COOKIE), LenIsValid = Buffer->Length == HeaderLen;
     else
         return FALSE;
-    if (Buffer->Length < RequiredLen || MdlLen < HeaderLen)
+    if (!LenIsValid || MdlLen < HeaderLen)
         return FALSE;
     RtlCopyMemory(Header + 1, Src + sizeof(*Header), HeaderLen - sizeof(*Header));
     return TRUE;
