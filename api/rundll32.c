@@ -293,10 +293,14 @@ cleanupThreads:
         CloseHandle(ThreadStdout);
     }
 cleanupPipes:
-    CloseHandle(StreamRStderr);
-    CloseHandle(StreamWStderr);
-    CloseHandle(StreamRStdout);
-    CloseHandle(StreamWStdout);
+    if (StreamRStderr != INVALID_HANDLE_VALUE)
+        CloseHandle(StreamRStderr);
+    if (StreamWStderr != INVALID_HANDLE_VALUE)
+        CloseHandle(StreamWStderr);
+    if (StreamRStdout != INVALID_HANDLE_VALUE)
+        CloseHandle(StreamRStdout);
+    if (StreamWStdout != INVALID_HANDLE_VALUE)
+        CloseHandle(StreamWStdout);
     Free(CommandLine);
 cleanupDelete:
     DeleteFileW(DllPath);
