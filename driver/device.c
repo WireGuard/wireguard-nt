@@ -148,7 +148,8 @@ SendNetBufferLists(
         if (!ReadBooleanNoFence(&Wg->IsUp))
         {
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_MEDIA_DISCONNECTED;
-            goto returnNbl;
+            ++Wg->Statistics.ifOutDiscards;
+            goto cleanupNbl;
         }
 
         NET_BUFFER *Nb = NET_BUFFER_LIST_FIRST_NB(Nbl);
@@ -157,7 +158,7 @@ SendNetBufferLists(
             LogInfoRatelimited(Wg, "Missing NET_BUFFER");
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_FAILURE;
             ++Wg->Statistics.ifOutErrors;
-            goto returnNbl;
+            goto cleanupNbl;
         }
 
         NET_BUFFER_LIST *CloneNbl = MemAllocateNetBufferListWithClonedGeometry(
@@ -165,7 +166,8 @@ SendNetBufferLists(
         if (!CloneNbl)
         {
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_RESOURCES;
-            goto returnNbl;
+            ++Wg->Statistics.ifOutDiscards;
+            goto cleanupNbl;
         }
         Nbl = CloneNbl;
 
@@ -186,7 +188,7 @@ SendNetBufferLists(
             LogInfoRatelimited(Wg, "Unsupported NBL protocol");
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_FAILURE;
             ++Wg->Statistics.ifOutErrors;
-            goto returnNbl;
+            goto cleanupNbl;
         }
         if ((!Header4 || Header4->Version != 4 || Ntohs(Header4->TotLen) != NET_BUFFER_DATA_LENGTH(Nb)) &&
             (!Header6 || Header6->Version != 6 ||
@@ -195,7 +197,7 @@ SendNetBufferLists(
             LogInfoRatelimited(Wg, "Invalid IP packet");
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_FAILURE;
             ++Wg->Statistics.ifOutErrors;
-            goto returnNbl;
+            goto cleanupNbl;
         }
 
         WG_PEER *Peer = AllowedIpsLookupDst(&Wg->PeerAllowedIps, Protocol, Header);
@@ -203,7 +205,7 @@ SendNetBufferLists(
         {
             NET_BUFFER_LIST_STATUS(Nbl) = NDIS_STATUS_FAILURE;
             ++Wg->Statistics.ifOutErrors;
-            goto returnNbl;
+            goto cleanupNbl;
         }
         ADDRESS_FAMILY Family = ReadUShortNoFence(&Peer->Endpoint.Addr.si_family);
         if (Family != AF_INET && Family != AF_INET6)
@@ -239,9 +241,8 @@ SendNetBufferLists(
 
     cleanupPeer:
         PeerPut(Peer);
-    returnNbl:
+    cleanupNbl:
         FreeSendNetBufferList(Wg, Nbl, CompleteFlags);
-        ++Wg->Statistics.ifOutDiscards;
     }
 }
 

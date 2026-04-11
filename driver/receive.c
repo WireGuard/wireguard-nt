@@ -366,7 +366,6 @@ dishonestPacketSize:
     goto falsePacket;
 falsePacket:
     ++Peer->Device->Statistics.ifInErrors;
-    ++Peer->Device->Statistics.ifInDiscards;
 packetProcessed:
     FreeReceiveNetBufferList(Nbl);
     return FALSE;
