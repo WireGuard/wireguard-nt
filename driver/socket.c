@@ -860,7 +860,6 @@ cleanupWskRegister:
 cleanupLookaside:
     ExDeleteLookasideListEx(&SocketSendCtxCache);
 cleanupIniting:
-    WriteNoFence(&WskInitStatus, Status);
     MuReleasePushLockExclusive(&WskIsIniting);
     return Status;
 }
