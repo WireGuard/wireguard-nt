@@ -111,7 +111,10 @@ DoOrphanedDeviceCleanup(_In_opt_ LPVOID Ctx)
 static VOID QueueUpOrphanedDeviceCleanupRoutine(VOID)
 {
     if (InterlockedCompareExchange(&OrphanThreadIsWorking, TRUE, FALSE) == FALSE)
-        QueueUserWorkItem(DoOrphanedDeviceCleanup, NULL, 0);
+    {
+        if (!QueueUserWorkItem(DoOrphanedDeviceCleanup, NULL, 0))
+            OrphanThreadIsWorking = FALSE;
+    }
 }
 
 VOID AdapterCleanupOrphanedDevices(VOID)
