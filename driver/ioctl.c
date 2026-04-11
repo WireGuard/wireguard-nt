@@ -191,6 +191,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
                 ++IoctlPeer->AllowedIPsCount;
                 IoctlAllowedIp->AddressFamily =
                     AllowedIpsReadNode(AllowedIpsNode, (UINT8 *)&IoctlAllowedIp->Address, &IoctlAllowedIp->Cidr);
+                IoctlAllowedIp->Flags = 0;
             }
             ++IoctlAllowedIp;
         }
