@@ -516,7 +516,14 @@ Up(_Inout_ WG_DEVICE *Wg)
         ObReferenceObject(Wg->SocketOwnerProcess);
     NTSTATUS Status = SocketInit(Wg, Wg->IncomingPort);
     if (!NT_SUCCESS(Status))
+    {
+        if (Wg->SocketOwnerProcess)
+        {
+            ObDereferenceObject(Wg->SocketOwnerProcess);
+            Wg->SocketOwnerProcess = NULL;
+        }
         return Status;
+    }
     WriteBooleanNoFence(&Wg->IsUp, TRUE);
     DeviceStart(Wg);
     DeviceIndicateConnectionStatus(Wg->MiniportAdapterHandle, MediaConnectStateConnected);
