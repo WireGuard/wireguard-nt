@@ -216,10 +216,11 @@ WireGuardSetAdapterLogging(WIREGUARD_ADAPTER *Adapter, WIREGUARD_ADAPTER_LOG_STA
     if (CurrentState != WIREGUARD_ADAPTER_LOG_OFF && LogState == WIREGUARD_ADAPTER_LOG_OFF && Adapter->LogThread)
     {
         CancelSynchronousIo(Adapter->LogThread);
-        BOOL Ret = WaitForSingleObject(Adapter->LogThread, INFINITE);
+        while (WaitForSingleObject(Adapter->LogThread, 100) == WAIT_TIMEOUT)
+            CancelSynchronousIo(Adapter->LogThread);
         CloseHandle(Adapter->LogThread);
         Adapter->LogThread = NULL;
-        return Ret;
+        return TRUE;
     }
     if (CurrentState == WIREGUARD_ADAPTER_LOG_OFF && LogState != WIREGUARD_ADAPTER_LOG_OFF && !Adapter->LogThread)
     {
