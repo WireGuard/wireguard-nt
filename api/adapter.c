@@ -536,7 +536,10 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
 
     Adapter = Zalloc(sizeof(*Adapter));
     if (!Adapter)
+    {
+        LastError = GetLastError();
         goto cleanupDriverInstall;
+    }
 
     WCHAR TunnelTypeName[MAX_ADAPTER_NAME + 8];
     if (_snwprintf_s(TunnelTypeName, _countof(TunnelTypeName), _TRUNCATE, L"%s Tunnel", TunnelType) == -1)
@@ -795,7 +798,10 @@ WireGuardOpenAdapter(LPCWSTR Name)
 
     Adapter = Zalloc(sizeof(*Adapter));
     if (!Adapter)
+    {
+        LastError = GetLastError();
         goto cleanupDeviceInstallationMutex;
+    }
 
     HDEVINFO DevInfo =
         SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, DIGCF_PRESENT, NULL, NULL, NULL);
