@@ -906,6 +906,7 @@ retry:
         {
             CloseSocket(New4);
             New4 = NULL;
+            Sa4.sin_port = Htons(Port);
             if (Status == STATUS_ADDRESS_ALREADY_EXISTS && !Port && Retries++ < 100)
                 goto retry;
             goto out;
