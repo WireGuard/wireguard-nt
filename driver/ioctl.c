@@ -42,7 +42,7 @@ static_assert(
 
 #undef SIZE_OF_EMBEDDED
 
-static DRIVER_DISPATCH *NdisDispatchDeviceControl, *NdisDispatchCreate, *NdisDispatchPnp;
+static DRIVER_DISPATCH *PriorDispatchDeviceControl, *PriorDispatchCreate, *PriorDispatchPnp;
 /* The following binary blob security descriptor was generated via:
  *    PSECURITY_DESCRIPTOR Sd;
  *    ULONG SdLen;
@@ -649,7 +649,7 @@ DispatchDeviceControl(DEVICE_OBJECT *DeviceObject, IRP *Irp)
         ReadLogLine(DeviceObject, Irp);
         break;
     default:
-        return NdisDispatchDeviceControl(DeviceObject, Irp);
+        return PriorDispatchDeviceControl(DeviceObject, Irp);
     }
     NTSTATUS Status = Irp->IoStatus.Status;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -670,7 +670,7 @@ DispatchCreate(DEVICE_OBJECT *DeviceObject, IRP *Irp)
         IoCompleteRequest(Irp, IO_NO_INCREMENT);
         return NDIS_STATUS_ADAPTER_REMOVED;
     }
-    return NdisDispatchCreate(DeviceObject, Irp);
+    return PriorDispatchCreate(DeviceObject, Irp);
 }
 
 _Dispatch_type_(IRP_MJ_PNP)
@@ -690,7 +690,7 @@ DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
     KeSetEvent(&Wg->Log.NewEntry, IO_NO_INCREMENT, FALSE);
 
 ndisDispatch:
-    return NdisDispatchPnp(DeviceObject, Irp);
+    return PriorDispatchPnp(DeviceObject, Irp);
 }
 
 #ifdef ALLOC_PRAGMA
@@ -702,9 +702,9 @@ _Use_decl_annotations_
 VOID
 IoctlDriverEntry(DRIVER_OBJECT *DriverObject)
 {
-    NdisDispatchDeviceControl = DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL];
-    NdisDispatchCreate = DriverObject->MajorFunction[IRP_MJ_CREATE];
-    NdisDispatchPnp = DriverObject->MajorFunction[IRP_MJ_PNP];
+    PriorDispatchDeviceControl = DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL];
+    PriorDispatchCreate = DriverObject->MajorFunction[IRP_MJ_CREATE];
+    PriorDispatchPnp = DriverObject->MajorFunction[IRP_MJ_PNP];
     DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchDeviceControl;
     DriverObject->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
     DriverObject->MajorFunction[IRP_MJ_PNP] = DispatchPnp;

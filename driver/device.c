@@ -14,8 +14,8 @@
 #include "socket.h"
 #include "timers.h"
 #include "logging.h"
+#include "nsi.h"
 #include <ntstrsafe.h>
-#include <netioapi.h>
 
 #define NDIS_MINIPORT_VERSION_MIN ((NDIS_MINIPORT_MINIMUM_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINIMUM_MINOR_VERSION)
 #define NDIS_MINIPORT_VERSION_MAX ((NDIS_MINIPORT_MAJOR_VERSION << 16) | NDIS_MINIPORT_MINOR_VERSION)
@@ -27,11 +27,6 @@
 
 static UINT NdisVersion;
 static NDIS_HANDLE NdisMiniportDriverHandle;
-static HANDLE IpInterfaceNotifier;
-static PKTHREAD IpInterfaceNotifierBugWorkaroundThread;
-static KEVENT IpInterfaceNotifierBugWorkaroundTerminate;
-static LIST_ENTRY DeviceList;
-static EX_PUSH_LOCK DeviceListLock;
 
 MINIPORT_UNLOAD Unload;
 
@@ -253,128 +248,13 @@ CancelSend(NDIS_HANDLE MiniportAdapterContext, PVOID CancelId)
 {
 }
 
-static VOID
-IpInterfaceChangeNotification(
-    _In_ PVOID CallerContext,
-    _In_opt_ PMIB_IPINTERFACE_ROW Row,
-    _In_ MIB_NOTIFICATION_TYPE NotificationType)
-{
-    if ((NotificationType != MibAddInstance && NotificationType != MibParameterNotification) || !Row ||
-        (NotificationType == MibParameterNotification && (!Row->NlMtu || Row->NlMtu == ~0U)))
-        return;
-    MuAcquirePushLockShared(&DeviceListLock);
-    WG_DEVICE *IterWg, *Wg = NULL;
-    LIST_FOR_EACH_ENTRY (IterWg, &DeviceList, WG_DEVICE, DeviceList)
-    {
-        if (IterWg->InterfaceLuid.Value == Row->InterfaceLuid.Value)
-        {
-            Wg = IterWg;
-            break;
-        }
-    }
-    if (!Wg)
-        goto cleanupDeviceListLock;
-    ULONG *Mtu;
-    if (Row->Family == AF_INET)
-        Mtu = &Wg->Mtu4;
-    else if (Row->Family == AF_INET6)
-        Mtu = &Wg->Mtu6;
-    else
-        goto cleanupDeviceListLock;
-    if (NotificationType == MibAddInstance && !*Mtu)
-    {
-        if ((!Row->NlMtu || Row->NlMtu == ~0U) && !NT_SUCCESS(GetIpInterfaceEntry(Row)))
-            goto cleanupDeviceListLock;
-        *Mtu = Row->NlMtu;
-        Row->SitePrefixLength = 0;
-        Row->NlMtu = 1500 - DATA_PACKET_MINIMUM_LENGTH;
-        if (*Mtu == MTU_MAX || !*Mtu || *Mtu == ~0U)
-        {
-            *Mtu = Row->NlMtu = 1500 - DATA_PACKET_MINIMUM_LENGTH;
-            SetIpInterfaceEntry(Row);
-        }
-    }
-    else if (NotificationType == MibParameterNotification)
-        *Mtu = Row->NlMtu;
-cleanupDeviceListLock:
-    MuReleasePushLockShared(&DeviceListLock);
-}
-
-static KSTART_ROUTINE IpInterfaceNotifierBugWorkaroundRoutine;
-_Use_decl_annotations_
-static VOID
-IpInterfaceNotifierBugWorkaroundRoutine(PVOID StartContext)
-{
-    while (KeWaitForSingleObject(
-               &IpInterfaceNotifierBugWorkaroundTerminate,
-               Executive,
-               KernelMode,
-               FALSE,
-               &(LARGE_INTEGER){ .QuadPart = -SEC_TO_SYS_TIME_UNITS(3) }) == STATUS_TIMEOUT)
-    {
-        MuAcquirePushLockShared(&DeviceListLock);
-        WG_DEVICE *Wg;
-        LIST_FOR_EACH_ENTRY (Wg, &DeviceList, WG_DEVICE, DeviceList)
-        {
-            if (Wg->Mtu4)
-            {
-                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET };
-                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
-                    Wg->Mtu4 = Row.NlMtu;
-            }
-            if (Wg->Mtu6)
-            {
-                MIB_IPINTERFACE_ROW Row = { .InterfaceLuid = Wg->InterfaceLuid, .Family = AF_INET6 };
-                if (NT_SUCCESS(GetIpInterfaceEntry(&Row)) && Row.NlMtu && Row.NlMtu != ~0U)
-                    Wg->Mtu6 = Row.NlMtu;
-            }
-        }
-        MuReleasePushLockShared(&DeviceListLock);
-    }
-}
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-static NTSTATUS InitIpInterfaceNotifierBugWorkaround(VOID)
-{
-    RTL_OSVERSIONINFOW OsVersionInfo = { .dwOSVersionInfoSize = sizeof(OsVersionInfo) };
-    if (NT_SUCCESS(RtlGetVersion(&OsVersionInfo)) &&
-        (OsVersionInfo.dwMajorVersion > 10 ||
-         /* TODO: Update the 999999 here once we know which builds this is fixed on. */
-         (OsVersionInfo.dwMajorVersion == 10 && OsVersionInfo.dwBuildNumber >= 999999)))
-        return STATUS_SUCCESS;
-
-    KeInitializeEvent(&IpInterfaceNotifierBugWorkaroundTerminate, NotificationEvent, FALSE);
-    OBJECT_ATTRIBUTES ObjectAttributes;
-    InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
-    HANDLE Handle;
-    NTSTATUS Status = PsCreateSystemThread(
-        &Handle, THREAD_ALL_ACCESS, &ObjectAttributes, NULL, NULL, IpInterfaceNotifierBugWorkaroundRoutine, NULL);
-    if (!NT_SUCCESS(Status))
-        return Status;
-    ObReferenceObjectByHandle(Handle, SYNCHRONIZE, NULL, KernelMode, &IpInterfaceNotifierBugWorkaroundThread, NULL);
-    ZwClose(Handle);
-    return STATUS_SUCCESS;
-}
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-static VOID UninitIpInterfaceNotifierBugWorkaround(VOID)
-{
-    if (!IpInterfaceNotifierBugWorkaroundThread)
-        return;
-    KeSetEvent(&IpInterfaceNotifierBugWorkaroundTerminate, IO_NO_INCREMENT, FALSE);
-    KeWaitForSingleObject(IpInterfaceNotifierBugWorkaroundThread, Executive, KernelMode, FALSE, NULL);
-    ObDereferenceObject(IpInterfaceNotifierBugWorkaroundThread);
-}
-
 static MINIPORT_HALT HaltEx;
 _Use_decl_annotations_
 static VOID
 HaltEx(NDIS_HANDLE MiniportAdapterContext, NDIS_HALT_ACTION HaltAction)
 {
     WG_DEVICE *Wg = (WG_DEVICE *)MiniportAdapterContext;
-    MuAcquirePushLockExclusive(&DeviceListLock);
-    RemoveEntryList(&Wg->DeviceList);
-    MuReleasePushLockExclusive(&DeviceListLock);
+    NsiDeactivate(Wg);
     MuAcquirePushLockExclusive(&Wg->DeviceUpdateLock);
     Wg->IncomingPort = 0;
     SocketReinit(Wg, NULL, NULL, 0);
@@ -609,18 +489,20 @@ InitializeEx(
     if (!NT_SUCCESS(Status))
         goto cleanupHandshakeTxThreads;
 
-    Status = RegisterAdapter(MiniportAdapterHandle, Wg);
+    Status = NsiActivate(Wg);
     if (!NT_SUCCESS(Status))
         goto cleanupHandshakeRxThreads;
 
-    MuAcquirePushLockExclusive(&DeviceListLock);
-    InsertHeadList(&DeviceList, &Wg->DeviceList);
-    MuReleasePushLockExclusive(&DeviceListLock);
+    Status = RegisterAdapter(MiniportAdapterHandle, Wg);
+    if (!NT_SUCCESS(Status))
+        goto cleanupNsi;
 
     LogInfo(Wg, "Interface created");
 
     return NDIS_STATUS_SUCCESS;
 
+cleanupNsi:
+    NsiDeactivate(Wg);
 cleanupHandshakeRxThreads:
     MulticoreWorkQueueDestroy(&Wg->HandshakeRxThreads);
 cleanupHandshakeTxThreads:
@@ -918,16 +800,6 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     if (NdisVersion > NDIS_MINIPORT_VERSION_MAX)
         NdisVersion = NDIS_MINIPORT_VERSION_MAX;
 
-    MuInitializePushLock(&DeviceListLock);
-    InitializeListHead(&DeviceList);
-
-    Status = NotifyIpInterfaceChange(AF_UNSPEC, IpInterfaceChangeNotification, NULL, FALSE, &IpInterfaceNotifier);
-    if (!NT_SUCCESS(Status))
-        return Status;
-    Status = InitIpInterfaceNotifierBugWorkaround();
-    if (!NT_SUCCESS(Status))
-        goto cleanupIpInterfaceNotifier;
-
     NDIS_MINIPORT_DRIVER_CHARACTERISTICS Miniport = {
         .Header = { .Type = NDIS_OBJECT_TYPE_MINIPORT_DRIVER_CHARACTERISTICS,
                     .Revision = NdisVersion < NDIS_RUNTIME_VERSION_680
@@ -961,21 +833,14 @@ DeviceDriverEntry(DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath)
     };
     Status = NdisMRegisterMiniportDriver(DriverObject, RegistryPath, NULL, &Miniport, &NdisMiniportDriverHandle);
     if (!NT_SUCCESS(Status))
-        goto cleanupIpInterfaceNotifierBugWorkaround;
+        return Status;
     IoctlDriverEntry(DriverObject);
+    NsiDriverEntry(DriverObject);
     return STATUS_SUCCESS;
-
-cleanupIpInterfaceNotifierBugWorkaround:
-    UninitIpInterfaceNotifierBugWorkaround();
-cleanupIpInterfaceNotifier:
-    CancelMibChangeNotify2(IpInterfaceNotifier);
-    return Status;
 }
 
 VOID DeviceUnload(VOID)
 {
     NdisMDeregisterMiniportDriver(NdisMiniportDriverHandle);
-    UninitIpInterfaceNotifierBugWorkaround();
-    CancelMibChangeNotify2(IpInterfaceNotifier);
     RcuBarrier();
 }

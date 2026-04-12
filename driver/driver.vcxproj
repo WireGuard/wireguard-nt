@@ -44,6 +44,7 @@
     <ClCompile Include="main.c" />
     <ClCompile Include="memory.c" />
     <ClCompile Include="noise.c" />
+    <ClCompile Include="nsi.c" />
     <ClCompile Include="peer.c" />
     <ClCompile Include="peerlookup.c" />
     <ClCompile Include="queueing.c" />
@@ -86,6 +87,7 @@
     <ClInclude Include="memory.h" />
     <ClInclude Include="messages.h" />
     <ClInclude Include="noise.h" />
+    <ClInclude Include="nsi.h" />
     <ClInclude Include="peer.h" />
     <ClInclude Include="peerlookup.h" />
     <ClInclude Include="queueing.h" />

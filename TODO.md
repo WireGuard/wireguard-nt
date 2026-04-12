@@ -30,10 +30,6 @@ choose the right behavior in this case.
 
 ## Bug workarounds
 
-### Remove MTU polling
-When NotifyIpInterfaceChange is fixed for MTU changes, adjust the dwBuildNumber
-check for the workaround thread polling.
-
 ### Remove `IP_OPTIONS`/`IPV6_RTHDR` hack
 Currently we tag on an empty options cmsg to work around a bug in recent
 Windows builds, where `IP_PKTINFO` gets stripped if it's passed alone.
