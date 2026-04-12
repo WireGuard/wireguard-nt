@@ -248,9 +248,9 @@ SocketSendNblsToPeer(WG_PEER *Peer, NET_BUFFER_LIST *First, BOOLEAN *AllKeepaliv
     SOCKET *Socket = NULL;
     RcuReadLockAtDpcLevel();
     if (Peer->Endpoint.Addr.si_family == AF_INET)
-        Socket = RcuDereference(SOCKET, Peer->Device->Sock4);
+        Socket = RcuDereference(Peer->Device->Sock4);
     else if (Peer->Endpoint.Addr.si_family == AF_INET6)
-        Socket = RcuDereference(SOCKET, Peer->Device->Sock6);
+        Socket = RcuDereference(Peer->Device->Sock6);
     if (!Socket)
     {
         Status = STATUS_NETWORK_UNREACHABLE;
@@ -311,9 +311,9 @@ SocketSendBufferToPeer(WG_PEER *Peer, CONST VOID *Buffer, ULONG Len)
     SOCKET *Socket = NULL;
     RcuReadLockAtDpcLevel();
     if (Peer->Endpoint.Addr.si_family == AF_INET)
-        Socket = RcuDereference(SOCKET, Peer->Device->Sock4);
+        Socket = RcuDereference(Peer->Device->Sock4);
     else if (Peer->Endpoint.Addr.si_family == AF_INET6)
-        Socket = RcuDereference(SOCKET, Peer->Device->Sock6);
+        Socket = RcuDereference(Peer->Device->Sock6);
     if (!Socket)
     {
         Status = STATUS_NETWORK_UNREACHABLE;
@@ -372,9 +372,9 @@ SocketSendBufferAsReplyToNbl(WG_DEVICE *Wg, CONST NET_BUFFER_LIST *InNbl, CONST 
     KIRQL Irql = RcuReadLock();
     SOCKET *Socket = NULL;
     if (Endpoint.Addr.si_family == AF_INET)
-        Socket = RcuDereference(SOCKET, Wg->Sock4);
+        Socket = RcuDereference(Wg->Sock4);
     else if (Endpoint.Addr.si_family == AF_INET6)
-        Socket = RcuDereference(SOCKET, Wg->Sock6);
+        Socket = RcuDereference(Wg->Sock6);
     if (!Socket)
     {
         Status = STATUS_NETWORK_UNREACHABLE;
@@ -933,8 +933,8 @@ VOID
 SocketReinit(WG_DEVICE *Wg, SOCKET *New4, SOCKET *New6, UINT16 Port)
 {
     MuAcquirePushLockExclusive(&Wg->SocketUpdateLock);
-    SOCKET *Old4 = RcuDereferenceProtected(SOCKET, Wg->Sock4, &Wg->SocketUpdateLock);
-    SOCKET *Old6 = RcuDereferenceProtected(SOCKET, Wg->Sock6, &Wg->SocketUpdateLock);
+    SOCKET *Old4 = RcuDereferenceProtected(Wg->Sock4, &Wg->SocketUpdateLock);
+    SOCKET *Old6 = RcuDereferenceProtected(Wg->Sock6, &Wg->SocketUpdateLock);
     RcuAssignPointer(Wg->Sock4, New4);
     RcuAssignPointer(Wg->Sock6, New6);
     if (New4 || New6)

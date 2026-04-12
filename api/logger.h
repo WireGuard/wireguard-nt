@@ -87,9 +87,9 @@ LoggerLastErrorFmt(_In_z_ _Printf_format_string_ LPCWSTR Format, ...)
 VOID
 LoggerGetRegistryKeyPath(_In_ HKEY Key, _Out_writes_z_(MAX_REG_PATH) LPWSTR Path);
 
-#define LOG(lvl, msg, ...) (LoggerLogFmt((lvl), msg, __VA_ARGS__))
-#define LOG_ERROR(err, msg, ...) (LoggerErrorFmt((err), msg, __VA_ARGS__))
-#define LOG_LAST_ERROR(msg, ...) (LoggerLastErrorFmt(msg, __VA_ARGS__))
+#define LOG(lvl, msg, ...) (LoggerLogFmt((lvl), msg __VA_OPT__(,) __VA_ARGS__))
+#define LOG_ERROR(err, msg, ...) (LoggerErrorFmt((err), msg __VA_OPT__(,) __VA_ARGS__))
+#define LOG_LAST_ERROR(msg, ...) (LoggerLastErrorFmt(msg __VA_OPT__(,) __VA_ARGS__))
 
 #define RET_ERROR(Ret, Error) ((Error) == ERROR_SUCCESS ? (Ret) : (SetLastError(Error), 0))
 

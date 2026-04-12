@@ -60,7 +60,7 @@ PubkeyHashtableLookup(PUBKEY_HASHTABLE *Table, CONST UINT8 Pubkey[NOISE_PUBLIC_K
     KIRQL Irql;
 
     Irql = RcuReadLock();
-    HLIST_FOR_EACH_ENTRY_RCU (IterPeer, PubkeyBucket(Table, Pubkey), WG_PEER, PubkeyHash)
+    HLIST_FOR_EACH_ENTRY_RCU (IterPeer, PubkeyBucket(Table, Pubkey), PubkeyHash)
     {
         if (RtlEqualMemory(Pubkey, IterPeer->Handshake.RemoteStatic, NOISE_PUBLIC_KEY_LEN))
         {
@@ -135,7 +135,7 @@ IndexHashtableInsert(INDEX_HASHTABLE *Table, INDEX_HASHTABLE_ENTRY *Entry)
 searchUnusedSlot:
     /* First we try to find an unused slot, randomly, while unlocked. */
     CryptoRandom(&Entry->Index, sizeof(Entry->Index));
-    HLIST_FOR_EACH_ENTRY_RCU (ExistingEntry, IndexBucket(Table, Entry->Index), INDEX_HASHTABLE_ENTRY, IndexHash)
+    HLIST_FOR_EACH_ENTRY_RCU (ExistingEntry, IndexBucket(Table, Entry->Index), IndexHash)
     {
         if (ExistingEntry->Index == Entry->Index)
             /* If it's already in use, we continue searching. */
@@ -146,7 +146,7 @@ searchUnusedSlot:
      * that nobody else stole it from us.
      */
     KeAcquireSpinLockAtDpcLevel(&Table->Lock);
-    HLIST_FOR_EACH_ENTRY_RCU (ExistingEntry, IndexBucket(Table, Entry->Index), INDEX_HASHTABLE_ENTRY, IndexHash)
+    HLIST_FOR_EACH_ENTRY_RCU (ExistingEntry, IndexBucket(Table, Entry->Index), IndexHash)
     {
         if (ExistingEntry->Index == Entry->Index)
         {
@@ -213,7 +213,7 @@ IndexHashtableLookup(INDEX_HASHTABLE *Table, CONST INDEX_HASHTABLE_TYPE TypeMask
     KIRQL Irql;
 
     Irql = RcuReadLock();
-    HLIST_FOR_EACH_ENTRY_RCU (IterEntry, IndexBucket(Table, Index), INDEX_HASHTABLE_ENTRY, IndexHash)
+    HLIST_FOR_EACH_ENTRY_RCU (IterEntry, IndexBucket(Table, Index), IndexHash)
     {
         if (IterEntry->Index == Index)
         {

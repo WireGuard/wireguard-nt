@@ -262,7 +262,7 @@ AllowedIpsSelftest(VOID)
     Insert(4, A, 10, 1, 0, 20, 29);
     Insert(6, A, 0x26075300, 0x6d8a6bf8, 0xdab1f1df, 0xc05f1523, 83);
     Insert(6, A, 0x26075300, 0x6d8a6bf8, 0xdab1f1df, 0xc05f1523, 21);
-    LIST_FOR_EACH_ENTRY (IterNode, &A->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
+    LIST_FOR_EACH_ENTRY (IterNode, &A->AllowedIpsList, PeerList)
     {
         UINT8 Cidr;
         ADDRESS_FAMILY Family = AllowedIpsReadNode(IterNode, Ip, &Cidr);

@@ -169,7 +169,7 @@ KeepKeyFresh(_Inout_ WG_PEER *Peer)
         return;
 
     Irql = RcuReadLock();
-    Keypair = RcuDereference(NOISE_KEYPAIR, Peer->Keypairs.CurrentKeypair);
+    Keypair = RcuDereference(Peer->Keypairs.CurrentKeypair);
     Send = Keypair && ReadBooleanNoFence(&Keypair->Sending.IsValid) && Keypair->IAmTheInitiator &&
            BirthdateHasExpired(Keypair->Sending.Birthdate, REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT);
     RcuReadUnlock(Irql);

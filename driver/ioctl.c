@@ -141,7 +141,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
 
     WG_IOCTL_PEER *IoctlPeer = (WG_IOCTL_PEER *)((UCHAR *)IoctlInterface + sizeof(WG_IOCTL_INTERFACE));
     WG_PEER *Peer;
-    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, PeerList)
     {
         FinalSize += sizeof(WG_IOCTL_PEER);
         if (OutSize >= FinalSize)
@@ -181,7 +181,7 @@ Get(_In_ DEVICE_OBJECT *DeviceObject, _Inout_ IRP *Irp)
         WG_IOCTL_ALLOWED_IP *IoctlAllowedIp = (WG_IOCTL_ALLOWED_IP *)((UCHAR *)IoctlPeer + sizeof(WG_IOCTL_PEER));
         ALLOWEDIPS_NODE *AllowedIpsNode;
         ULONG AllowedIpsLimit = MAXULONG;
-        LIST_FOR_EACH_ENTRY (AllowedIpsNode, &Peer->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
+        LIST_FOR_EACH_ENTRY (AllowedIpsNode, &Peer->AllowedIpsList, PeerList)
         {
             if (!(--AllowedIpsLimit))
                 break;
@@ -214,7 +214,7 @@ SetListenPort(_Inout_ WG_DEVICE *Wg, _In_ USHORT ListenPort)
     if (Wg->IncomingPort == ListenPort)
         return STATUS_SUCCESS;
     WG_PEER *Peer;
-    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, PeerList)
         SocketClearPeerEndpointSrc(Peer);
     if (ReadBooleanNoFence(&Wg->IsUp))
         return SocketInit(Wg, ListenPort);
@@ -252,7 +252,7 @@ SetPrivateKey(_Inout_ WG_DEVICE *Wg, _In_ CONST UCHAR PrivateKey[WG_KEY_LEN])
     SendStagedPackets = SendStagedPackets && Wg->StaticIdentity.HasIdentity;
     _Analysis_assume_same_lock_(Wg->CookieChecker.Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
     CookieCheckerPrecomputeDeviceKeys(&Wg->CookieChecker);
-    LIST_FOR_EACH_ENTRY_SAFE (Peer, Temp, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY_SAFE (Peer, Temp, &Wg->PeerList, PeerList)
     {
         _Analysis_assume_same_lock_(Peer->Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
         NoisePrecomputeStaticStatic(Peer);

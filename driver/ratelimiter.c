@@ -72,12 +72,12 @@ RatelimiterGcEntries(_In_opt_ PVOID StartContext)
         for (i = 0; i < TABLE_SIZE; ++i)
         {
             KeAcquireSpinLock(&TableLock, &Irql);
-            HLIST_FOR_EACH_ENTRY_SAFE (Entry, Temp, &TableV4[i], RATELIMITER_ENTRY, Hash)
+            HLIST_FOR_EACH_ENTRY_SAFE (Entry, Temp, &TableV4[i], Hash)
             {
                 if (!StartContext || Now - Entry->LastTime > SYS_TIME_UNITS_PER_SEC)
                     EntryUninit(Entry);
             }
-            HLIST_FOR_EACH_ENTRY_SAFE (Entry, Temp, &TableV6[i], RATELIMITER_ENTRY, Hash)
+            HLIST_FOR_EACH_ENTRY_SAFE (Entry, Temp, &TableV6[i], Hash)
             {
                 if (!StartContext || Now - Entry->LastTime > SYS_TIME_UNITS_PER_SEC)
                     EntryUninit(Entry);
@@ -119,7 +119,7 @@ RatelimiterAllow(CONST SOCKADDR *Src)
     else
         return FALSE;
     Irql = RcuReadLock();
-    HLIST_FOR_EACH_ENTRY_RCU (Entry, Bucket, RATELIMITER_ENTRY, Hash)
+    HLIST_FOR_EACH_ENTRY_RCU (Entry, Bucket, Hash)
     {
         if (Entry->Ip == Ip)
         {

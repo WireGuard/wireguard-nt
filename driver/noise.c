@@ -171,15 +171,15 @@ NoiseKeypairsClear(NOISE_KEYPAIRS *Keypairs)
      * wg_noise_received_with_keypair returns early before subsequent ones
      * are zeroed.
      */
-    Old = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock);
+    Old = RcuDereferenceProtected(Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock);
     RcuInitPointer(Keypairs->NextKeypair, NULL);
     NoiseKeypairPut(Old, TRUE);
 
-    Old = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
+    Old = RcuDereferenceProtected(Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
     RcuInitPointer(Keypairs->PreviousKeypair, NULL);
     NoiseKeypairPut(Old, TRUE);
 
-    Old = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock);
+    Old = RcuDereferenceProtected(Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock);
     RcuInitPointer(Keypairs->CurrentKeypair, NULL);
     NoiseKeypairPut(Old, TRUE);
 
@@ -197,10 +197,10 @@ NoiseExpireCurrentPeerKeypairs(WG_PEER *Peer)
     NoiseResetLastSentHandshake(&Peer->LastSentHandshake);
 
     KeAcquireSpinLock(&Peer->Keypairs.KeypairUpdateLock, &Irql);
-    Keypair = RcuDereferenceProtected(NOISE_KEYPAIR, Peer->Keypairs.NextKeypair, &Peer->Keypairs.KeypairUpdateLock);
+    Keypair = RcuDereferenceProtected(Peer->Keypairs.NextKeypair, &Peer->Keypairs.KeypairUpdateLock);
     if (Keypair)
         Keypair->Sending.IsValid = FALSE;
-    Keypair = RcuDereferenceProtected(NOISE_KEYPAIR, Peer->Keypairs.CurrentKeypair, &Peer->Keypairs.KeypairUpdateLock);
+    Keypair = RcuDereferenceProtected(Peer->Keypairs.CurrentKeypair, &Peer->Keypairs.KeypairUpdateLock);
     if (Keypair)
         Keypair->Sending.IsValid = FALSE;
     KeReleaseSpinLock(&Peer->Keypairs.KeypairUpdateLock, Irql);
@@ -215,9 +215,9 @@ AddNewKeypair(_Inout_ NOISE_KEYPAIRS *Keypairs, _In_ __drv_aliasesMem NOISE_KEYP
     KIRQL Irql;
 
     KeAcquireSpinLock(&Keypairs->KeypairUpdateLock, &Irql);
-    PreviousKeypair = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
-    NextKeypair = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock);
-    CurrentKeypair = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock);
+    PreviousKeypair = RcuDereferenceProtected(Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
+    NextKeypair = RcuDereferenceProtected(Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock);
+    CurrentKeypair = RcuDereferenceProtected(Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock);
     if (NewKeypair->IAmTheInitiator)
     {
         /* If we're the initiator, it means we've sent a handshake, and
@@ -281,7 +281,7 @@ NoiseReceivedWithKeypair(NOISE_KEYPAIRS *Keypairs, NOISE_KEYPAIR *ReceivedKeypai
     /* After locking, we double check that things didn't change from
      * beneath us.
      */
-    if (ReceivedKeypair != RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock))
+    if (ReceivedKeypair != RcuDereferenceProtected(Keypairs->NextKeypair, &Keypairs->KeypairUpdateLock))
     {
         KeReleaseSpinLock(&Keypairs->KeypairUpdateLock, Irql);
         return FALSE;
@@ -291,10 +291,10 @@ NoiseReceivedWithKeypair(NOISE_KEYPAIRS *Keypairs, NOISE_KEYPAIR *ReceivedKeypai
      * into the current, the current into the previous, and get rid of
      * the old previous.
      */
-    OldKeypair = RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
+    OldKeypair = RcuDereferenceProtected(Keypairs->PreviousKeypair, &Keypairs->KeypairUpdateLock);
     RcuAssignPointer(
         Keypairs->PreviousKeypair,
-        RcuDereferenceProtected(NOISE_KEYPAIR, Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock));
+        RcuDereferenceProtected(Keypairs->CurrentKeypair, &Keypairs->KeypairUpdateLock));
     NoiseKeypairPut(OldKeypair, TRUE);
     RcuAssignPointer(Keypairs->CurrentKeypair, ReceivedKeypair);
     RcuInitPointer(Keypairs->NextKeypair, NULL);

@@ -57,7 +57,7 @@ PushRcu(_Inout_ ALLOWEDIPS_NODE *Stack[STACK_ENTRIES], _In_ ALLOWEDIPS_NODE __rc
     if (RcuAccessPointer(P))
     {
         NT_ASSERT(*Len < STACK_ENTRIES);
-        Stack[(*Len)++] = RcuDereference(ALLOWEDIPS_NODE, P);
+        Stack[(*Len)++] = RcuDereference(P);
     }
     _Analysis_assume_rcu_not_held_;
 }
@@ -138,7 +138,7 @@ FindNode(_In_ ALLOWEDIPS_NODE *Trie, _In_ UINT8 Bits, _In_reads_bytes_(Bits / 8)
             Found = Node;
         if (Node->Cidr == Bits)
             break;
-        Node = RcuDereference(ALLOWEDIPS_NODE, Node->Bit[Choose(Node, Key)]);
+        Node = RcuDereference(Node->Bit[Choose(Node, Key)]);
     }
     return Found;
 }
@@ -160,10 +160,10 @@ Lookup(_In_ ALLOWEDIPS_NODE __rcu *Root, _In_ UINT8 Bits, _In_reads_bytes_(Bits 
 
     Irql = RcuReadLock();
 retry:
-    Node = FindNode(RcuDereference(ALLOWEDIPS_NODE, Root), Bits, Ip);
+    Node = FindNode(RcuDereference(Root), Bits, Ip);
     if (Node)
     {
-        Peer = PeerGetMaybeZero(RcuDereference(WG_PEER, Node->Peer));
+        Peer = PeerGetMaybeZero(RcuDereference(Node->Peer));
         if (!Peer)
             goto retry;
     }
@@ -181,7 +181,7 @@ NodePlacement(
     _Out_ ALLOWEDIPS_NODE **Rnode,
     _In_ EX_PUSH_LOCK *Lock)
 {
-    ALLOWEDIPS_NODE *Node = RcuDereferenceProtected(ALLOWEDIPS_NODE, Trie, Lock);
+    ALLOWEDIPS_NODE *Node = RcuDereferenceProtected(Trie, Lock);
     ALLOWEDIPS_NODE *Parent = NULL;
     BOOLEAN Exact = FALSE;
 
@@ -193,7 +193,7 @@ NodePlacement(
             Exact = TRUE;
             break;
         }
-        Node = RcuDereferenceProtected(ALLOWEDIPS_NODE, Parent->Bit[Choose(Parent, Key)], Lock);
+        Node = RcuDereferenceProtected(Parent->Bit[Choose(Parent, Key)], Lock);
     }
     *Rnode = Parent;
     return Exact;
@@ -257,12 +257,12 @@ Add(_Inout_ ALLOWEDIPS_NODE __rcu **Trie,
 
     if (!Node)
     {
-        Down = RcuDereferenceProtected(ALLOWEDIPS_NODE, *Trie, Lock);
+        Down = RcuDereferenceProtected(*Trie, Lock);
     }
     else
     {
         CONST UINT8 Bit = Choose(Node, Key);
-        Down = RcuDereferenceProtected(ALLOWEDIPS_NODE, Node->Bit[Bit], Lock);
+        Down = RcuDereferenceProtected(Node->Bit[Bit], Lock);
         if (!Down)
         {
             ConnectNode(&Node->Bit[Bit], Bit, Newnode);
@@ -314,7 +314,7 @@ RemoveNode(_Inout_ ALLOWEDIPS_NODE *Node, _In_ EX_PUSH_LOCK *Lock)
     RcuInitPointer(Node->Peer, NULL);
     if (Node->Bit[0] && Node->Bit[1])
         return;
-    Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Node->Bit[!RcuAccessPointer(Node->Bit[0])], Lock);
+    Child = RcuDereferenceProtected(Node->Bit[!RcuAccessPointer(Node->Bit[0])], Lock);
     if (Child)
         Child->ParentBitPacked = Node->ParentBitPacked;
     ParentBit = (ALLOWEDIPS_NODE **)(Node->ParentBitPacked & ~(ULONG_PTR)3);
@@ -324,7 +324,7 @@ RemoveNode(_Inout_ ALLOWEDIPS_NODE *Node, _In_ EX_PUSH_LOCK *Lock)
     FreeParent = !RcuAccessPointer(Node->Bit[0]) && !RcuAccessPointer(Node->Bit[1]) &&
                  (Node->ParentBitPacked & 3) <= 1 && !RcuAccessPointer(Parent->Peer);
     if (FreeParent)
-        Child = RcuDereferenceProtected(ALLOWEDIPS_NODE, Parent->Bit[!(Node->ParentBitPacked & 1)], Lock);
+        Child = RcuDereferenceProtected(Parent->Bit[!(Node->ParentBitPacked & 1)], Lock);
     RcuCall(&Node->Rcu, NodeFreeRcu);
     if (!FreeParent)
         return;
@@ -366,8 +366,8 @@ _Use_decl_annotations_
 VOID
 AllowedIpsFree(ALLOWEDIPS_TABLE *Table, EX_PUSH_LOCK *Lock)
 {
-    ALLOWEDIPS_NODE *Old4 = RcuDereferenceProtected(ALLOWEDIPS_NODE, Table->Root4, Lock);
-    ALLOWEDIPS_NODE *Old6 = RcuDereferenceProtected(ALLOWEDIPS_NODE, Table->Root6, Lock);
+    ALLOWEDIPS_NODE *Old4 = RcuDereferenceProtected(Table->Root4, Lock);
+    ALLOWEDIPS_NODE *Old6 = RcuDereferenceProtected(Table->Root6, Lock);
 
     RcuInitPointer(Table->Root4, NULL);
     RcuInitPointer(Table->Root6, NULL);
@@ -435,7 +435,7 @@ AllowedIpsRemoveByPeer(ALLOWEDIPS_TABLE *Table, WG_PEER *Peer, EX_PUSH_LOCK *Loc
 
     if (IsListEmpty(&Peer->AllowedIpsList))
         return;
-    LIST_FOR_EACH_ENTRY_SAFE (Node, Tmp, &Peer->AllowedIpsList, ALLOWEDIPS_NODE, PeerList)
+    LIST_FOR_EACH_ENTRY_SAFE (Node, Tmp, &Peer->AllowedIpsList, PeerList)
         RemoveNode(Node, Lock);
 }
 

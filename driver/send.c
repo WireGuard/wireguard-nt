@@ -143,7 +143,7 @@ KeepKeyFresh(_Inout_ WG_PEER *Peer)
     BOOLEAN Send;
 
     Irql = RcuReadLock();
-    Keypair = RcuDereference(NOISE_KEYPAIR, Peer->Keypairs.CurrentKeypair);
+    Keypair = RcuDereference(Peer->Keypairs.CurrentKeypair);
     Send = Keypair && ReadBooleanNoFence(&Keypair->Sending.IsValid) &&
            (ReadNoFence64(&Keypair->SendingCounter) > REKEY_AFTER_MESSAGES ||
             (Keypair->IAmTheInitiator && BirthdateHasExpired(Keypair->Sending.Birthdate, REKEY_AFTER_TIME)));
@@ -421,7 +421,7 @@ PacketSendStagedPackets(WG_PEER *Peer)
 
     /* First we make sure we have a valid reference to a valid key. */
     Irql = RcuReadLock();
-    Keypair = NoiseKeypairGet(RcuDereference(NOISE_KEYPAIR, Peer->Keypairs.CurrentKeypair));
+    Keypair = NoiseKeypairGet(RcuDereference(Peer->Keypairs.CurrentKeypair));
     RcuReadUnlock(Irql);
     if (!Keypair)
         goto outNokey;

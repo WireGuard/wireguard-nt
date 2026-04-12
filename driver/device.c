@@ -36,7 +36,7 @@ DeviceStart(WG_DEVICE *Wg)
 {
     WG_PEER *Peer;
 
-    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, PeerList)
     {
         PacketSendStagedPackets(Peer);
         if (Peer->PersistentKeepaliveInterval)
@@ -65,7 +65,7 @@ DeviceStop(WG_DEVICE *Wg)
 {
     WG_PEER *Peer;
 
-    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY (Peer, &Wg->PeerList, PeerList)
     {
         PacketPurgeStagedPackets(Peer);
         TimersStop(Peer);

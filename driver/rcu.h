@@ -94,7 +94,7 @@ __RcuDereference(_In_ _Interlocked_operand_ PVOID CONST volatile *Source)
 {
     return ReadPointerNoFence(Source);
 }
-#define RcuDereference(Type, P) ((Type *)__RcuDereference(&(P)))
+#define RcuDereference(P) ((typeof(P))__RcuDereference(&(P)))
 
 _Requires_lock_held_(Lock)
 static inline PVOID
@@ -102,7 +102,7 @@ __RcuDereferenceProtected(_In_ PVOID *Address, _In_ PVOID Lock)
 {
     return *Address;
 }
-#define RcuDereferenceProtected(Type, P, Lock) ((Type *)__RcuDereferenceProtected(&(P), Lock))
+#define RcuDereferenceProtected(P, Lock) ((typeof(P))__RcuDereferenceProtected(&(P), Lock))
 
 _IRQL_requires_max_(APC_LEVEL)
 VOID RcuSynchronize(VOID);
@@ -129,7 +129,7 @@ __RcuFree(_Out_ RCU_CALLBACK *Head, _In_ SIZE_T Offset)
     __RcuCall(Head);
 }
 
-#define RcuFree(Type, Head, Member) __RcuFree(&((Type *)(Head))->Member, FIELD_OFFSET(Type, Member))
+#define RcuFree(Head, Member) __RcuFree(&(Head)->Member, FIELD_OFFSET(typeof(*(Head)), Member))
 
 _IRQL_requires_max_(APC_LEVEL)
 VOID RcuBarrier(VOID);

@@ -31,7 +31,7 @@ IpInterfaceChangeNotification(
         return;
     MuAcquirePushLockShared(&DeviceListLock);
     WG_DEVICE *IterWg, *Wg = NULL;
-    LIST_FOR_EACH_ENTRY (IterWg, &DeviceList, WG_DEVICE, DeviceList)
+    LIST_FOR_EACH_ENTRY (IterWg, &DeviceList, DeviceList)
     {
         if (IterWg->InterfaceLuid.Value == Row->InterfaceLuid.Value)
         {

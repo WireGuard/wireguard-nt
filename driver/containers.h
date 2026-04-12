@@ -12,14 +12,14 @@
 #include <wdm.h>
 #include <ndis.h>
 
-#define LIST_FOR_EACH_ENTRY(Pos, Head, Type, Member) \
-    for (Pos = CONTAINING_RECORD((Head)->Flink, Type, Member); &Pos->Member != (Head); \
-         Pos = CONTAINING_RECORD((Pos)->Member.Flink, Type, Member))
-#define LIST_FOR_EACH_ENTRY_SAFE(Pos, Tmp, Head, Type, Member) \
-    for (Pos = CONTAINING_RECORD((Head)->Flink, Type, Member), \
-        Tmp = CONTAINING_RECORD((Pos)->Member.Flink, Type, Member); \
+#define LIST_FOR_EACH_ENTRY(Pos, Head, Member) \
+    for (Pos = CONTAINING_RECORD((Head)->Flink, typeof(*(Pos)), Member); &Pos->Member != (Head); \
+         Pos = CONTAINING_RECORD((Pos)->Member.Flink, typeof(*(Pos)), Member))
+#define LIST_FOR_EACH_ENTRY_SAFE(Pos, Tmp, Head, Member) \
+    for (Pos = CONTAINING_RECORD((Head)->Flink, typeof(*(Pos)), Member), \
+        Tmp = CONTAINING_RECORD((Pos)->Member.Flink, typeof(*(Pos)), Member); \
          &Pos->Member != (Head); \
-         Pos = Tmp, Tmp = CONTAINING_RECORD((Tmp)->Member.Flink, Type, Member))
+         Pos = Tmp, Tmp = CONTAINING_RECORD((Tmp)->Member.Flink, typeof(*(Pos)), Member))
 
 typedef struct _HLIST_NODE HLIST_NODE;
 struct _HLIST_NODE
@@ -109,13 +109,13 @@ HlistAddHeadRcu(_Inout_ __drv_aliasesMem HLIST_NODE *Node, _Inout_ HLIST_HEAD *H
 
 #define HlistEntry(Ptr, Type, Member) CONTAINING_RECORD(Ptr, Type, Member)
 #define HlistEntrySafe(Ptr, Type, Member) ((Ptr) ? HlistEntry(Ptr, Type, Member) : NULL)
-#define HLIST_FOR_EACH_ENTRY_SAFE(Pos, Tmp, Head, Type, Member) \
-    for (Pos = HlistEntrySafe((Head)->First, Type, Member); Pos && (Tmp = Pos->Member.Next, 1); \
-         Pos = HlistEntrySafe(Tmp, Type, Member))
+#define HLIST_FOR_EACH_ENTRY_SAFE(Pos, Tmp, Head, Member) \
+    for (Pos = HlistEntrySafe((Head)->First, typeof(*(Pos)), Member); Pos && (Tmp = Pos->Member.Next, 1); \
+         Pos = HlistEntrySafe(Tmp, typeof(*(Pos)), Member))
 
-#define HLIST_FOR_EACH_ENTRY_RCU(Pos, Head, Type, Member) \
-    for (Pos = HlistEntrySafe(RcuDereference(Type, HlistFirstRcu(Head)), Type, Member); Pos; \
-         Pos = HlistEntrySafe(RcuDereference(Type, HlistNextRcu(&(Pos)->Member)), Type, Member))
+#define HLIST_FOR_EACH_ENTRY_RCU(Pos, Head, Member) \
+    for (Pos = HlistEntrySafe(RcuDereference(HlistFirstRcu(Head)), typeof(*(Pos)), Member); Pos; \
+         Pos = HlistEntrySafe(RcuDereference(HlistNextRcu(&(Pos)->Member)), typeof(*(Pos)), Member))
 
 #define DECLARE_HASHTABLE(Name, Bits) HLIST_HEAD Name[1 << (Bits)]
 #define HASH_SIZE(Name) (ARRAYSIZE(Name))

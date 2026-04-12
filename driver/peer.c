@@ -97,7 +97,7 @@ PeerRemoveAll(WG_DEVICE *Wg)
     /* Avoid having to traverse individually for each one. */
     AllowedIpsFree(&Wg->PeerAllowedIps, &Wg->DeviceUpdateLock);
 
-    LIST_FOR_EACH_ENTRY_SAFE (Peer, Temp, &Wg->PeerList, WG_PEER, PeerList)
+    LIST_FOR_EACH_ENTRY_SAFE (Peer, Temp, &Wg->PeerList, PeerList)
     {
         _Analysis_assume_same_lock_(Peer->Device->DeviceUpdateLock, Wg->DeviceUpdateLock);
         PeerRemove(Peer);
