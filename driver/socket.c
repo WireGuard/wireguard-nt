@@ -402,10 +402,10 @@ cleanupCtx:
 }
 
 static_assert(
-    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(RTL_FIELD_SIZE(ENDPOINT, Src4))) == WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src4)),
+    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(FIELD_SIZE(ENDPOINT, Src4))) == WSA_CMSG_SPACE(FIELD_SIZE(ENDPOINT, Src4)),
     "cmsg calculation mismatch");
 static_assert(
-    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(RTL_FIELD_SIZE(ENDPOINT, Src6))) == WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src6)),
+    WSA_CMSGDATA_ALIGN(WSA_CMSG_LEN(FIELD_SIZE(ENDPOINT, Src6))) == WSA_CMSG_SPACE(FIELD_SIZE(ENDPOINT, Src6)),
     "cmsg calculation mismatch");
 static_assert(
     WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR)) + FIELD_OFFSET(ENDPOINT, Cmsg) == FIELD_OFFSET(ENDPOINT, Src4),
@@ -414,10 +414,10 @@ static_assert(
     WSA_CMSGDATA_ALIGN(sizeof(WSACMSGHDR)) + FIELD_OFFSET(ENDPOINT, Cmsg) == FIELD_OFFSET(ENDPOINT, Src6),
     "cmsg calculation mismatch");
 static_assert(
-    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src4)) <= sizeof(ENDPOINT),
+    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(FIELD_SIZE(ENDPOINT, Src4)) <= sizeof(ENDPOINT),
     "cmsg calculation mismatch");
 static_assert(
-    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(RTL_FIELD_SIZE(ENDPOINT, Src6)) <= sizeof(ENDPOINT),
+    FIELD_OFFSET(ENDPOINT, Cmsg) + WSA_CMSG_SPACE(FIELD_SIZE(ENDPOINT, Src6)) <= sizeof(ENDPOINT),
     "cmsg calculation mismatch");
 static_assert(WSA_CMSG_SPACE(0) == sizeof(WSACMSGHDR), "cmsg calculation mismatch");
 
