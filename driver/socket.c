@@ -711,6 +711,7 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
             goto cleanupSocket;
     }
 
+    KeClearEvent(&Done);
     IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
     IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskBind(Sock, Sa, 0, &I.Irp);
@@ -727,6 +728,7 @@ CreateAndBindSocket(_In_ WG_DEVICE *Wg, _Inout_ SOCKADDR *Sa, _Out_ SOCKET **Ret
         goto cleanupSocket;
     }
 
+    KeClearEvent(&Done);
     IoInitializeIrp(&I.Irp, sizeof(I.IrpBuffer), 1);
     IoSetCompletionRoutine(&I.Irp, RaiseEventOnComplete, &Done, TRUE, TRUE, TRUE);
     Status = ((WSK_PROVIDER_DATAGRAM_DISPATCH *)Sock->Dispatch)->WskGetLocalAddress(Sock, Sa, &I.Irp);
