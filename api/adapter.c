@@ -581,8 +581,7 @@ WireGuardCreateAdapter(LPCWSTR Name, LPCWSTR TunnelType, const GUID *RequestedGU
     SW_DEVICE_CREATE_INFO StubCreateInfo = { .cbSize = sizeof(StubCreateInfo),
                                              .pszInstanceId = InstanceIdStr,
                                              .pszzHardwareIds = L"",
-                                             .CapabilityFlags =
-                                                 SWDeviceCapabilitiesSilentInstall | SWDeviceCapabilitiesDriverRequired,
+                                             .CapabilityFlags = SWDeviceCapabilitiesSilentInstall,
                                              .pszDeviceDescription = TunnelTypeName };
     DEVPROPERTY StubDeviceProperties[] = { { .CompKey = { .Key = DEVPKEY_Device_ClassGuid,
                                                           .Store = DEVPROP_STORE_SYSTEM },
