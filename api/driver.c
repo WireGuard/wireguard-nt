@@ -256,14 +256,17 @@ EnableAllOurAdapters(_In_ HDEVINFO DevInfo, _In_ SP_DEVINFO_DATA_LIST *AdaptersT
             LOG_LAST_ERROR(L"Failed to enable adapter \"%s\"", Name);
             LastError = LastError != ERROR_SUCCESS ? LastError : GetLastError();
         }
-        LOG(WIREGUARD_LOG_INFO, L"Restoring configuration of adapter \"%s\"", Name);
-        if (!RestoreConfigurationAndState(
-                DevInfo,
-                &DeviceNode->Data,
-                DeviceNode->Configuration,
-                DeviceNode->ConfigurationBytes,
-                DeviceNode->AdapterState))
-            LOG(WIREGUARD_LOG_WARN, L"Failed to restore configuration of adapter \"%s\"", Name);
+        if (DeviceNode->Configuration)
+        {
+            LOG(WIREGUARD_LOG_INFO, L"Restoring configuration of adapter \"%s\"", Name);
+            if (!RestoreConfigurationAndState(
+                    DevInfo,
+                    &DeviceNode->Data,
+                    DeviceNode->Configuration,
+                    DeviceNode->ConfigurationBytes,
+                    DeviceNode->AdapterState))
+                LOG(WIREGUARD_LOG_WARN, L"Failed to restore configuration of adapter \"%s\"", Name);
+        }
     }
     return RET_ERROR(TRUE, LastError);
 }
