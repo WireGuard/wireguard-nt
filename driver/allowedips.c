@@ -151,7 +151,7 @@ static WG_PEER *
 Lookup(_In_ ALLOWEDIPS_NODE __rcu *Root, _In_ UINT8 Bits, _In_reads_bytes_(Bits / 8) CONST VOID *BeIp)
 {
     /* Aligned so it can be passed to FindLastSet/FindLastSet64 */
-    __declspec(align(8)) UINT8 Ip[16];
+    DECLSPEC_ALIGN(8) UINT8 Ip[16];
     ALLOWEDIPS_NODE *Node;
     WG_PEER *Peer = NULL;
     KIRQL Irql;
@@ -388,7 +388,7 @@ NTSTATUS
 AllowedIpsInsertV4(ALLOWEDIPS_TABLE *Table, CONST IN_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
 {
     /* Aligned so it can be passed to FindLastSet */
-    __declspec(align(4)) UINT8 Key[4];
+    DECLSPEC_ALIGN(4) UINT8 Key[4];
 
     SwapEndian(Key, (CONST UINT8 *)Ip, 32);
     return Add(&Table->Root4, 32, Key, Cidr, Peer, Lock);
@@ -399,7 +399,7 @@ NTSTATUS
 AllowedIpsInsertV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
 {
     /* Aligned so it can be passed to FindLastSet64 */
-    __declspec(align(8)) UINT8 Key[16];
+    DECLSPEC_ALIGN(8) UINT8 Key[16];
 
     SwapEndian(Key, (CONST UINT8 *)Ip, 128);
     return Add(&Table->Root6, 128, Key, Cidr, Peer, Lock);
@@ -410,7 +410,7 @@ NTSTATUS
 AllowedIpsRemoveV4(ALLOWEDIPS_TABLE *Table, CONST IN_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
 {
     /* Aligned so it can be passed to FindLastSet */
-    __declspec(align(4)) UINT8 Key[4];
+    DECLSPEC_ALIGN(4) UINT8 Key[4];
 
     SwapEndian(Key, (CONST UINT8 *)Ip, 32);
     return Remove(&Table->Root4, 32, Key, Cidr, Peer, Lock);
@@ -421,7 +421,7 @@ NTSTATUS
 AllowedIpsRemoveV6(ALLOWEDIPS_TABLE *Table, CONST IN6_ADDR *Ip, UINT8 Cidr, WG_PEER *Peer, EX_PUSH_LOCK *Lock)
 {
     /* Aligned so it can be passed to FindLastSet64 */
-    __declspec(align(8)) UINT8 Key[16];
+    DECLSPEC_ALIGN(8) UINT8 Key[16];
 
     SwapEndian(Key, (CONST UINT8 *)Ip, 128);
     return Remove(&Table->Root6, 128, Key, Cidr, Peer, Lock);

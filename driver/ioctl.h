@@ -24,7 +24,7 @@ typedef enum
     WG_IOCTL_ALLOWED_IP_REMOVE = 1 << 0
 } WG_IOCTL_ALLOWED_IP_FLAG;
 
-typedef __declspec(align(8)) struct _WG_IOCTL_ALLOWED_IP
+typedef DECLSPEC_ALIGN(8) struct _WG_IOCTL_ALLOWED_IP
 {
     union
     {
@@ -48,7 +48,7 @@ typedef enum
     WG_IOCTL_PEER_UPDATE_ONLY = 1 << 7
 } WG_IOCTL_PEER_FLAG;
 
-typedef __declspec(align(8)) struct _WG_IOCTL_PEER
+typedef DECLSPEC_ALIGN(8) struct _WG_IOCTL_PEER
 {
     WG_IOCTL_PEER_FLAG Flags;
     ULONG ProtocolVersion; /* 0 = latest protocol, 1 = this protocol. */
@@ -70,7 +70,7 @@ typedef enum
     WG_IOCTL_INTERFACE_REPLACE_PEERS = 1 << 3
 } WG_IOCTL_INTERFACE_FLAG;
 
-typedef __declspec(align(8)) struct _WG_IOCTL_INTERFACE
+typedef DECLSPEC_ALIGN(8) struct _WG_IOCTL_INTERFACE
 {
     WG_IOCTL_INTERFACE_FLAG Flags;
     USHORT ListenPort;
@@ -86,7 +86,7 @@ typedef enum
     WG_IOCTL_ADAPTER_STATE_QUERY = 2
 } WG_IOCTL_ADAPTER_STATE;
 
-typedef __declspec(align(8)) struct _WG_IOCTL_LOG_ENTRY
+typedef DECLSPEC_ALIGN(8) struct _WG_IOCTL_LOG_ENTRY
 {
     ULONG64 Timestamp;
     CHAR Msg[120];

@@ -19,7 +19,7 @@ struct _ALLOWEDIPS_NODE
     WG_PEER __rcu *Peer;
     ALLOWEDIPS_NODE __rcu *Bit[2];
     UINT8 Cidr, BitAtA, BitAtB, Bitlen;
-    __declspec(align(8)) UINT8 Bits[16];
+    DECLSPEC_ALIGN(8) UINT8 Bits[16];
 
     /* Keep rarely used members at bottom to be beyond cache line. */
     ULONG_PTR ParentBitPacked;
@@ -30,7 +30,7 @@ struct _ALLOWEDIPS_NODE
     };
 };
 
-typedef __declspec(align(4)) struct _ALLOWEDIPS_TABLE
+typedef DECLSPEC_ALIGN(4) struct _ALLOWEDIPS_TABLE
 {
     ALLOWEDIPS_NODE __rcu *Root4;
     ALLOWEDIPS_NODE __rcu *Root6;

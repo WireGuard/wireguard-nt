@@ -104,7 +104,7 @@ AllowedIpsSelftest(VOID)
     EX_PUSH_LOCK Mutex;
     SIZE_T i = 0, Count = 0;
     UINT64_BE Part;
-    __declspec(align(8)) UINT8 Ip[16];
+    DECLSPEC_ALIGN(8) UINT8 Ip[16];
 
     MuInitializePushLock(&Mutex);
     MuAcquirePushLockExclusive(&Mutex);
