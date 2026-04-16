@@ -115,7 +115,7 @@ typedef struct _PROCESS_STDOUT_STATE
     DWORD ResponseCapacity;
 } PROCESS_STDOUT_STATE;
 
-_Return_type_success_(return != ERROR_SUCCESS)
+_Return_type_success_(return == ERROR_SUCCESS)
 static DWORD WINAPI
 ProcessStdout(_Inout_ PROCESS_STDOUT_STATE *State)
 {
