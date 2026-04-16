@@ -361,7 +361,7 @@ SocketSendBufferAsReplyToNbl(WG_DEVICE *Wg, CONST NET_BUFFER_LIST *InNbl, CONST 
     Ctx->Wg = Wg;
     IoInitializeIrp(&Ctx->Irp, sizeof(Ctx->IrpBuffer), 1);
     IoSetCompletionRoutine(&Ctx->Irp, BufferSendComplete, Ctx, TRUE, TRUE, TRUE);
-    ENDPOINT Endpoint;
+    ENDPOINT Endpoint; /* WSK copies addresses and cmsg before pending, despite documentation suggestion. */
     Status = SocketEndpointFromNbl(&Endpoint, InNbl);
     if (!NT_SUCCESS(Status))
         goto cleanupMdl;
