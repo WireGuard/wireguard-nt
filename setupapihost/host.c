@@ -58,7 +58,7 @@ VOID __stdcall RemoveInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
 
-    if (Argc < 3)
+    if (!Argv || Argc < 3)
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 
@@ -103,7 +103,7 @@ VOID __stdcall EnableInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
 
-    if (Argc < 3)
+    if (!Argv || Argc < 3)
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 
@@ -146,7 +146,7 @@ VOID __stdcall DisableInstance(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, in
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(GetCommandLineW(), &Argc);
 
-    if (Argc < 3)
+    if (!Argv || Argc < 3)
         goto cleanup;
     WCHAR *InstanceId = Argv[2];
 

@@ -337,7 +337,7 @@ InvokeClassInstaller(_In_ LPCWSTR Action, _In_ LPCWSTR Function, _In_ HDEVINFO D
     }
     int Argc;
     LPWSTR *Argv = CommandLineToArgvW(Response, &Argc);
-    if (Argc < 1)
+    if (!Argv || Argc < 1)
     {
         LastError = LOG_ERROR(ERROR_INVALID_PARAMETER, L"Incomplete response: %s", Response);
         goto cleanupArgv;
