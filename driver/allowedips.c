@@ -279,7 +279,7 @@ Add(_Inout_ ALLOWEDIPS_NODE __rcu **Trie,
             ConnectNode(Trie, 2, Newnode);
         else
             ChooseAndConnectNode(Parent, Newnode);
-        return 0;
+        return STATUS_SUCCESS;
     }
 
     Node = ExAllocateFromLookasideListEx(&NodeCache);
