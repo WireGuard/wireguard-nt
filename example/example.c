@@ -239,6 +239,7 @@ TalkToDemoServer(
         {
             closesocket(Socket);
             Socket = INVALID_SOCKET;
+            continue;
         }
         memcpy(ResolvedDemoServer, Candidate->ai_addr, Candidate->ai_addrlen);
         break;
