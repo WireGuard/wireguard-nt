@@ -104,7 +104,7 @@ LoggerAlloc(_In_z_ LPCWSTR Function, _In_ DWORD Flags, _In_ SIZE_T Size)
     VOID *Data = HeapAlloc(ModuleHeap, Flags, Size);
     if (!Data)
     {
-        LoggerLogFmt(WIREGUARD_LOG_ERR, Function, L"Out of memory (flags: 0x%x, requested size: 0x%zx)", Flags, Size);
+        LoggerLogFmt(WIREGUARD_LOG_ERR, L"%s: Out of memory (flags: 0x%x, requested size: 0x%zx)", Function, Flags, Size);
         SetLastError(ERROR_OUTOFMEMORY);
     }
     return Data;
@@ -120,7 +120,7 @@ LoggerReAlloc(_In_z_ LPCWSTR Function, _In_ DWORD Flags, _Frees_ptr_opt_ LPVOID 
     VOID *Data = Mem ? HeapReAlloc(ModuleHeap, Flags, Mem, Size) : HeapAlloc(ModuleHeap, Flags, Size);
     if (!Data)
     {
-        LoggerLogFmt(WIREGUARD_LOG_ERR, Function, L"Out of memory (flags: 0x%x, requested size: 0x%zx)", Flags, Size);
+        LoggerLogFmt(WIREGUARD_LOG_ERR, L"%s: Out of memory (flags: 0x%x, requested size: 0x%zx)", Function, Flags, Size);
         SetLastError(ERROR_OUTOFMEMORY);
     }
     return Data;
