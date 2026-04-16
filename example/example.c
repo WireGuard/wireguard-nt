@@ -260,10 +260,10 @@ cleanupResolution:
 
 int __cdecl main(void)
 {
-    DWORD LastError;
     WSADATA WsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &WsaData))
-        return LogError(L"Failed to initialize Winsock", GetLastError());
+    DWORD LastError = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    if (LastError)
+        return LogError(L"Failed to initialize Winsock", LastError);
     HMODULE WireGuard = InitializeWireGuardNT();
     if (!WireGuard)
     {
