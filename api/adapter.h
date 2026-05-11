@@ -86,7 +86,7 @@ AdapterGetDeviceObjectFileName(_In_z_ LPCWSTR InstanceId);
 /**
  * Cleans up adapters with no attached process.
  */
-VOID AdapterCleanupOrphanedDevices(VOID);
+VOID AdapterCleanupOrphanedDevices(BOOL Background);
 
 /**
  * Removes the specified device instance.

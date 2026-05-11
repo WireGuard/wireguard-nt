@@ -98,42 +98,97 @@ cleanupKey:
     return RET_ERROR(TRUE, LastError);
 }
 
-static volatile LONG OrphanThreadIsWorking = FALSE;
-
-static DWORD
-DoOrphanedDeviceCleanup(_In_opt_ LPVOID Ctx)
+static VOID
+CleanupOrphanedDevices(VOID)
 {
-    AdapterCleanupOrphanedDevices();
-    OrphanThreadIsWorking = FALSE;
-    return 0;
-}
+    SP_DEVINFO_DATA DevInfoData = { .cbSize = sizeof(DevInfoData) };
+    WCHAR InstanceId[MAX_DEVICE_ID_LEN];
 
-static VOID QueueUpOrphanedDeviceCleanupRoutine(VOID)
-{
-    if (InterlockedCompareExchange(&OrphanThreadIsWorking, TRUE, FALSE) == FALSE)
+    /* Step 1) ROOT\WIREGUARD devices that are actually recognized by PNP and probably loading the driver. */
+    HANDLE DriverInstallationMutex = NamespaceTakeDriverInstallationMutex();
+    if (!DriverInstallationMutex)
     {
-        if (!QueueUserWorkItem(DoOrphanedDeviceCleanup, NULL, 0))
-            OrphanThreadIsWorking = FALSE;
+        LOG(WIREGUARD_LOG_ERR, L"Failed to take driver installation mutex");
+        goto cleanupSwd;
     }
-}
+    HDEVINFO DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, L"ROOT\\" WIREGUARD_HWID, NULL, 0, NULL, NULL, NULL);
+    if (DevInfo == INVALID_HANDLE_VALUE)
+    {
+        LOG_LAST_ERROR(L"Failed to get adapters");
+        goto cleanupReg;
+    }
+    for (DWORD EnumIndex = 0;; ++EnumIndex)
+    {
+        if (!SetupDiEnumDeviceInfo(DevInfo, EnumIndex, &DevInfoData))
+        {
+            if (GetLastError() == ERROR_NO_MORE_ITEMS)
+                break;
+            continue;
+        }
+        DWORD RequiredChars = _countof(InstanceId);
+        if (!SetupDiGetDeviceInstanceIdW(DevInfo, &DevInfoData, InstanceId, RequiredChars, &RequiredChars))
+            wcsncpy_s(InstanceId, _countof(InstanceId), L"<unknown>", _TRUNCATE);
+        if (AdapterRemoveInstance(DevInfo, &DevInfoData))
+            LOG(WIREGUARD_LOG_INFO, L"Removed stray adapter %s", InstanceId);
+        else
+            LOG_LAST_ERROR(L"Failed to remove stray adapter %s", InstanceId);
+    }
+    SetupDiDestroyDeviceInfoList(DevInfo);
 
-VOID AdapterCleanupOrphanedDevices(VOID)
-{
+    /* Step 2) ROOT\WIREGUARD devices that are not recognized by PNP, which were likely temporary nodes left around by driver installation. */
+cleanupReg:
+    HKEY EnumKey;
+    if (RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            L"SYSTEM\\CurrentControlSet\\Enum\\ROOT\\" WIREGUARD_HWID,
+            0,
+            KEY_ENUMERATE_SUB_KEYS,
+            &EnumKey) != ERROR_SUCCESS)
+        goto cleanupDriverInstallationMutex;
+
+    for (DWORD Index = 0;;)
+    {
+        WCHAR SubKey[MAX_DEVICE_ID_LEN];
+        DWORD SubKeyLen = _countof(SubKey);
+        if (RegEnumKeyExW(EnumKey, Index, SubKey, &SubKeyLen, NULL, NULL, NULL, NULL) != ERROR_SUCCESS ||
+            _snwprintf_s(InstanceId, _countof(InstanceId), _TRUNCATE, L"ROOT\\" WIREGUARD_HWID L"\\%s", SubKey) < 0)
+            break;
+
+        DEVINST DevInst;
+        if (CM_Locate_DevNodeW(&DevInst, InstanceId, CM_LOCATE_DEVNODE_NORMAL) == CR_SUCCESS)
+        {
+            ++Index;
+            continue;
+        }
+        LSTATUS LastError = ERROR_SUCCESS;
+        if ((CM_Locate_DevNodeW(&DevInst, InstanceId, CM_LOCATE_DEVNODE_PHANTOM) == CR_SUCCESS &&
+             CM_Uninstall_DevNode(DevInst, 0) == CR_SUCCESS) ||
+            (LastError = RegDeleteTreeW(EnumKey, SubKey)) == ERROR_SUCCESS)
+            LOG(WIREGUARD_LOG_INFO, L"Removed phantom adapter %s", InstanceId);
+        else
+        {
+            ++Index;
+            LOG_ERROR(LastError, L"Failed to remove phantom adapter %s", InstanceId);
+        }
+    }
+    RegCloseKey(EnumKey);
+cleanupDriverInstallationMutex:
+    NamespaceReleaseMutex(DriverInstallationMutex);
+
+    /* Step 3) SWD\WIREGUARD devices that were left around when the process was forcibly killed. */
+cleanupSwd:
     HANDLE DeviceInstallationMutex = NamespaceTakeDeviceInstallationMutex();
     if (!DeviceInstallationMutex)
     {
-        LOG_LAST_ERROR(L"Failed to take device installation mutex");
+        LOG(WIREGUARD_LOG_ERR, L"Failed to take device installation mutex");
         return;
     }
-
-    HDEVINFO DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, 0, NULL, NULL, NULL);
+    DevInfo = SetupDiGetClassDevsExW(&GUID_DEVCLASS_NET, WIREGUARD_ENUMERATOR, NULL, 0, NULL, NULL, NULL);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
         LOG_LAST_ERROR(L"Failed to get adapters");
         goto cleanupDeviceInstallationMutex;
     }
-
-    SP_DEVINFO_DATA DevInfoData = { .cbSize = sizeof(DevInfoData) };
     for (DWORD EnumIndex = 0;; ++EnumIndex)
     {
         if (!SetupDiEnumDeviceInfo(DevInfo, EnumIndex, &DevInfoData))
@@ -145,28 +200,42 @@ VOID AdapterCleanupOrphanedDevices(VOID)
         ULONG Status, Code;
         if (CM_Get_DevNode_Status(&Status, &Code, DevInfoData.DevInst, 0) == CR_SUCCESS && !(Status & DN_HAS_PROBLEM))
             continue;
-
-        DEVPROPTYPE PropType;
-        WCHAR Name[MAX_ADAPTER_NAME] = L"<unknown>";
-        SetupDiGetDevicePropertyW(
-            DevInfo,
-            &DevInfoData,
-            &DEVPKEY_WireGuard_Name,
-            &PropType,
-            (PBYTE)Name,
-            MAX_ADAPTER_NAME * sizeof(Name[0]),
-            NULL,
-            0);
-        if (!AdapterRemoveInstance(DevInfo, &DevInfoData))
-        {
-            LOG_LAST_ERROR(L"Failed to remove orphaned adapter \"%s\"", Name);
-            continue;
-        }
-        LOG(WIREGUARD_LOG_INFO, L"Removed orphaned adapter \"%s\"", Name);
+        DWORD RequiredChars = _countof(InstanceId);
+        if (!SetupDiGetDeviceInstanceIdW(DevInfo, &DevInfoData, InstanceId, RequiredChars, &RequiredChars))
+            wcsncpy_s(InstanceId, _countof(InstanceId), L"<unknown>", _TRUNCATE);
+        if (AdapterRemoveInstance(DevInfo, &DevInfoData))
+            LOG(WIREGUARD_LOG_INFO, L"Removed orphaned adapter %s", InstanceId);
+        else
+            LOG_LAST_ERROR(L"Failed to remove orphaned adapter %s", InstanceId);
     }
     SetupDiDestroyDeviceInfoList(DevInfo);
 cleanupDeviceInstallationMutex:
     NamespaceReleaseMutex(DeviceInstallationMutex);
+}
+
+static volatile LONG OrphanThreadIsWorking = FALSE;
+
+static DWORD
+CleanupOrphanedDevicesThread(_In_opt_ LPVOID Ctx)
+{
+    CleanupOrphanedDevices();
+    InterlockedExchange(&OrphanThreadIsWorking, FALSE);
+    return 0;
+}
+
+VOID
+AdapterCleanupOrphanedDevices(BOOL Background)
+{
+    if (Background)
+    {
+        if (InterlockedCompareExchange(&OrphanThreadIsWorking, TRUE, FALSE) == FALSE)
+        {
+            if (!QueueUserWorkItem(CleanupOrphanedDevicesThread, NULL, 0))
+                InterlockedExchange(&OrphanThreadIsWorking, FALSE);
+        }
+    }
+    else
+        CleanupOrphanedDevices();
 }
 
 _Use_decl_annotations_
@@ -186,7 +255,7 @@ WireGuardCloseAdapter(WIREGUARD_ADAPTER *Adapter)
         SetupDiDestroyDeviceInfoList(Adapter->DevInfo);
     }
     Free(Adapter);
-    QueueUpOrphanedDeviceCleanupRoutine();
+    AdapterCleanupOrphanedDevices(TRUE);
 }
 
 static _Return_type_success_(return != FALSE)
@@ -777,7 +846,7 @@ cleanupDriverInstall:
 cleanupDeviceInstallationMutex:
     NamespaceReleaseMutex(DeviceInstallationMutex);
 cleanup:
-    QueueUpOrphanedDeviceCleanupRoutine();
+    AdapterCleanupOrphanedDevices(TRUE);
     return RET_ERROR(Adapter, LastError);
 }
 
@@ -866,7 +935,7 @@ cleanupAdapter:
 cleanupDeviceInstallationMutex:
     NamespaceReleaseMutex(DeviceInstallationMutex);
 cleanup:
-    QueueUpOrphanedDeviceCleanupRoutine();
+    AdapterCleanupOrphanedDevices(TRUE);
     return RET_ERROR(Adapter, LastError);
 }
 

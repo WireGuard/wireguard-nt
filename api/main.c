@@ -104,6 +104,7 @@ DllMain(_In_ HINSTANCE hinstDLL, _In_ DWORD fdwReason, _In_ LPVOID lpvReserved)
         }
         EnvInit();
         NamespaceInit();
+        AdapterCleanupOrphanedDevices(TRUE);
         break;
 
     case DLL_PROCESS_DETACH:

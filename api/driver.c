@@ -425,6 +425,7 @@ DriverInstall(HDEVINFO *DevInfoExistingAdaptersForCleanup, SP_DEVINFO_DATA_LIST 
 {
     static const FILETIME OurDriverDate = WIREGUARD_INF_FILETIME;
     static const DWORDLONG OurDriverVersion = WIREGUARD_INF_VERSION;
+
     HANDLE DriverInstallationLock = NamespaceTakeDriverInstallationMutex();
     if (!DriverInstallationLock)
     {
@@ -608,7 +609,7 @@ BOOL WINAPI WireGuardDeleteDriver(VOID)
 {
     DWORD LastError = ERROR_SUCCESS;
 
-    AdapterCleanupOrphanedDevices();
+    AdapterCleanupOrphanedDevices(FALSE);
 
     HANDLE DriverInstallationLock = NamespaceTakeDriverInstallationMutex();
     if (!DriverInstallationLock)
