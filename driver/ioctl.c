@@ -677,14 +677,26 @@ static NTSTATUS
 DispatchPnp(DEVICE_OBJECT *DeviceObject, IRP *Irp)
 {
     IO_STACK_LOCATION *Stack = IoGetCurrentIrpStackLocation(Irp);
-    if (Stack->MinorFunction != IRP_MN_QUERY_REMOVE_DEVICE && Stack->MinorFunction != IRP_MN_SURPRISE_REMOVAL)
+    BOOLEAN Removing;
+    switch (Stack->MinorFunction)
+    {
+    case IRP_MN_QUERY_REMOVE_DEVICE:
+    case IRP_MN_SURPRISE_REMOVAL:
+        Removing = TRUE;
+        break;
+    case IRP_MN_CANCEL_REMOVE_DEVICE:
+        Removing = FALSE;
+        break;
+    default:
         goto ndisDispatch;
+    }
 
     WG_DEVICE *Wg = WgDeviceFromFdo(DeviceObject);
     if (!Wg)
         goto ndisDispatch;
-    WriteBooleanNoFence(&Wg->IsDeviceRemoving, TRUE);
-    KeSetEvent(&Wg->Log.NewEntry, IO_NO_INCREMENT, FALSE);
+    WriteBooleanNoFence(&Wg->IsDeviceRemoving, Removing);
+    if (Removing)
+        KeSetEvent(&Wg->Log.NewEntry, IO_NO_INCREMENT, FALSE);
 
 ndisDispatch:
     return PriorDispatchPnp(DeviceObject, Irp);
