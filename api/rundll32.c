@@ -119,19 +119,21 @@ _Return_type_success_(return == ERROR_SUCCESS)
 static DWORD WINAPI
 ProcessStdout(_Inout_ PROCESS_STDOUT_STATE *State)
 {
+    if (!State->ResponseCapacity)
+        return ERROR_INVALID_PARAMETER;
     for (DWORD Offset = 0, MaxLen = State->ResponseCapacity - 1; Offset < MaxLen;)
     {
         DWORD Size;
         if (FAILED(DWordMult(MaxLen - Offset, sizeof(WCHAR), &Size)))
             return ERROR_BUFFER_OVERFLOW;
         if (!ReadFile(State->Stdout, State->Response + Offset, Size, &Size, NULL))
-            return ERROR_SUCCESS;
+            break;
         if (Size % sizeof(WCHAR))
             return ERROR_INVALID_DATA;
         Offset += Size / sizeof(WCHAR);
         State->Response[Offset] = 0;
     }
-    return ERROR_BUFFER_OVERFLOW;
+    return ERROR_SUCCESS;
 }
 
 static DWORD WINAPI
@@ -333,6 +335,11 @@ InvokeClassInstaller(_In_ LPCWSTR Action, _In_ LPCWSTR Function, _In_ HDEVINFO D
     if (!ExecuteRunDll32(Function, Arguments, Response, _countof(Response)))
     {
         LastError = LOG_LAST_ERROR(L"Error executing worker process: %s", Arguments);
+        goto cleanupArguments;
+    }
+    if (!Response[0])
+    {
+        LastError = LOG_ERROR(ERROR_INVALID_PARAMETER, L"Empty response from worker process");
         goto cleanupArguments;
     }
     int Argc;
