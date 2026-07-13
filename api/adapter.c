@@ -230,6 +230,11 @@ AdapterCleanupOrphanedDevices(BOOL Background)
     {
         if (InterlockedCompareExchange(&OrphanThreadIsWorking, TRUE, FALSE) == FALSE)
         {
+            HMODULE Pinned;
+            GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                (LPCWSTR)&CleanupOrphanedDevices,
+                &Pinned);
             if (!QueueUserWorkItem(CleanupOrphanedDevicesThread, NULL, 0))
                 InterlockedExchange(&OrphanThreadIsWorking, FALSE);
         }
